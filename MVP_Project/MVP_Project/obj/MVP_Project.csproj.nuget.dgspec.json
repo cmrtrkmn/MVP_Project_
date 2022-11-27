@@ -1,0 +1,77 @@
+{
+  "format": 1,
+  "restore": {
+    "C:\\Users\\cemre.turkmen\\Desktop\\notlarım\\MVP\\MVP_Project\\MVP_Project\\MVP_Project.csproj": {}
+  },
+  "projects": {
+    "C:\\Users\\cemre.turkmen\\Desktop\\notlarım\\MVP\\MVP_Project\\MVP_Project\\MVP_Project.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Users\\cemre.turkmen\\Desktop\\notlarım\\MVP\\MVP_Project\\MVP_Project\\MVP_Project.csproj",
+        "projectName": "MVP_Project",
+        "projectPath": "C:\\Users\\cemre.turkmen\\Desktop\\notlarım\\MVP\\MVP_Project\\MVP_Project\\MVP_Project.csproj",
+        "packagesPath": "C:\\Users\\cemre.turkmen\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\cemre.turkmen\\Desktop\\notlarım\\MVP\\MVP_Project\\MVP_Project\\obj\\",
+        "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "C:\\Program Files\\dotnet\\sdk\\NuGetFallbackFolder"
+        ],
+        "configFilePaths": [
+          "C:\\Users\\cemre.turkmen\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "netcoreapp3.1"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "https://api.nuget.org/v3/index.json": {},
+          "https://azuredevops.lcwaikiki.com/CounterStrike/_packaging/cs_nuget/nuget/v3/index.json": {},
+          "https://azuredevops.lcwaikiki.com/ProductSupplier/Wolf/_packaging/wolf_nuget/nuget/v3/index.json": {},
+          "https://devrepo.lcwaikiki.com/repository/Nuget-ParsCore/index.json": {}
+        },
+        "frameworks": {
+          "netcoreapp3.1": {
+            "targetAlias": "netcoreapp3.1",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        }
+      },
+      "frameworks": {
+        "netcoreapp3.1": {
+          "targetAlias": "netcoreapp3.1",
+          "dependencies": {
+            "Microsoft.VisualStudio.Web.CodeGeneration.Design": {
+              "target": "Package",
+              "version": "[3.1.5, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.AspNetCore.App": {
+              "privateAssets": "none"
+            },
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\5.0.411\\RuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

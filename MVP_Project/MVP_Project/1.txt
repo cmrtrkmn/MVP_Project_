@@ -1,0 +1,3180 @@
+
+
+DECLARE @SiparisNo INT;
+SET @SiparisNo = 793575; --129589              
+DECLARE @RaporTip INT; -- 1- Bizde 2 - Üreticide              
+SET @RaporTip = 1;
+
+DECLARE @ModelGrupRef INT;
+
+SELECT @ModelGrupRef = ModelGrupRef --613959
+FROM dbo.tb_AlimSiparisBaslik (NOLOCK)
+WHERE SiparisKod = 793575;
+
+CREATE TABLE #AlimSiparisDetay
+(
+    UrunGrupRef INT,
+    ModelKod VARCHAR(8),
+    AmbalajAdet INT,
+    Marka VARCHAR(4),
+    Sezon VARCHAR(3),
+    MerchAltGrup VARCHAR(5),
+    BuyerGrupTanim VARCHAR(255),
+    UrunKlasman INT,
+    KDVAlis VARCHAR(3),
+    SiparisKod INT,
+    Fiyat FLOAT,
+    Doviz VARCHAR(10),
+    YurtIciUreticiDepoTarihi DATETIME,
+    --UrunID decimal null, 
+    RevizeGelecekTarih VARCHAR(50),
+    GelecekTarih VARCHAR(50),
+    KumasciCarikod VARCHAR(50),
+    VIP BIT,
+    OrginalFabrikaCikisTarih DATETIME,
+    KumasFiyatDoviz INT,
+    KumasFiyati FLOAT,
+    Miktar INT,
+    Iptal INT,
+    UrunOptionRef INT,
+    UrunOptionAsortiRef INT,
+    UrunOptionSizeRef INT,
+    SellingRegion INT
+);
+CREATE TABLE #AlimSiparisIthalat
+(
+    [SiparisKod] INT,
+    UreticiCarikod VARCHAR(16),
+    UreticiFirmaRef INT,
+    KategoriNo INT,
+    AnlasilanYuklemeTermin DATETIME,
+    [MumessilCarikod] VARCHAR(16),
+    [OdemeVade] VARCHAR(3),
+    [AnlasilanUretimFiyat] [FLOAT],
+    [Vasitakod] [INT],
+    [YuklemeCikisLimani] [INT],
+    [AraciFirmaCariKod] VARCHAR(16),
+    [Mense] VARCHAR(5),
+    [KumasMense] VARCHAR(5),
+    [IthalatRejimKod] [INT],
+    [AkreditifNo] [INT],
+    [IhracatciCariKod] [CHAR](16),
+    [OdemeSekilkod] [INT],
+    [YuklemeSekilKod] [INT],
+    [AnlasilanUretimFiyatDoviz] VARCHAR(5),
+    [UrunOptionRef] [INT],
+    [UrunOptionAsortiRef] [INT],
+    [UrunOptionSizeRef] [INT]
+);
+
+
+INSERT INTO #AlimSiparisDetay
+SELECT ug.ID UrunGrupRef,
+       ug.OzelKod1 ModelKod,
+       ug.AmbalajAdet,
+       ug.Marka,
+       ug.Sezon,
+       ug.MerchAltGrup,
+       bg.Tanim,
+       ug.UrunKlasman,
+       ug.KdvAlis,
+       d.SiparisKod,
+       d.UreticiFiyat,
+       Doviz,
+       d.YurtIciUreticiDepoTarihi,
+       RevizeGelecekTarih,
+       GelecekTarih,
+       KumasciCarikod,
+       d.VIP,
+       ulke.InspectionDate,
+       KumasFiyatDoviz,
+       KumasFiyati,
+       CASE
+           WHEN os.AlimsiparisStatuId IN ( 7, 10, 11 ) THEN
+               0
+           ELSE
+               ulke.Miktar
+       END Miktar,
+       CASE
+           WHEN os.AlimsiparisStatuId IN ( 7, 10, 11 ) THEN
+               0
+           ELSE
+               ulke.Iptal
+       END Iptal,
+       u.UrunOptionRef,
+       u.UrunOptionAsortiRef,
+       u.UrunOptionSizeRef,
+       ulke.SellingRegion
+FROM dbo.tb_AlimSiparisDetay d (NOLOCK)
+    INNER JOIN dbo.tb_AlimSiparisBaslik b (NOLOCK)
+        ON b.SiparisKod = d.SiparisKod
+    INNER JOIN dbo.tb_ModelGrup mg (NOLOCK)
+        ON mg.Sira = b.ModelGrupRef
+    INNER JOIN dbo.tb_Urun u (NOLOCK)
+        ON d.UrunID = u.UrunID
+    INNER JOIN
+    (
+        SELECT UrunOptionRef,
+               UrunOptionSizeRef,
+               UrunOptionAsortiRef,
+               SUM(Miktar) AS Miktar,
+               SUM(Iptal) AS Iptal,
+               InspectionDate,
+               UrunId,
+               SellingRegion
+        FROM dbo.tb_AlimSiparisUlkeDetay (NOLOCK)
+        WHERE SiparisKod = 793575
+        GROUP BY InspectionDate,
+                 UrunOptionRef,
+                 UrunOptionSizeRef,
+                 UrunOptionAsortiRef,
+                 UrunId,
+                 SellingRegion
+    ) AS ulke
+        ON ulke.UrunOptionRef = u.UrunOptionRef
+           AND ulke.UrunId = u.UrunID
+    LEFT JOIN dbo.tb_AlimSiparisOptionStatu os
+        ON os.SiparisKod = b.SiparisKod
+           AND os.UrunOptionRef = u.UrunOptionRef --and os.AlimsiparisStatuId not in (10, 11)
+    INNER JOIN dbo.tb_UrunGrup ug (NOLOCK)
+        ON ug.UrunKod = u.UrunKod
+    INNER JOIN Planlama..vw_BuyerGrup bg (NOLOCK)
+        ON bg.UrunKlasman = ug.UrunKlasman
+           AND bg.MerchGrup = ug.MerchGrup
+WHERE d.SiparisKod = 793575; --and isnull(d.PlansizEklenen,0)=0; --and Miktar - Iptal > 0;
+--plans?zeklenen kontrolu hatal? sonuç getirdi?i için kald?r?ld?. 30-10-2020 firdevs 
+
+IF NOT EXISTS (SELECT * FROM #AlimSiparisDetay)
+BEGIN
+    INSERT INTO #AlimSiparisDetay
+    (
+        UrunGrupRef,
+        ModelKod,
+        AmbalajAdet,
+        Marka,
+        Sezon,
+        MerchAltGrup,
+        BuyerGrupTanim,
+        UrunKlasman,
+        KDVAlis,
+        SiparisKod,
+        Fiyat,
+        Doviz,
+        YurtIciUreticiDepoTarihi,
+        RevizeGelecekTarih,
+        GelecekTarih,
+        KumasciCarikod,
+        VIP,
+        OrginalFabrikaCikisTarih,
+        KumasFiyatDoviz,
+        KumasFiyati,
+        Miktar,
+        Iptal,
+        UrunOptionRef,
+        UrunOptionAsortiRef,
+        UrunOptionSizeRef,
+        SellingRegion
+    )
+    SELECT DISTINCT
+           uo.ModelRef UrunGrupRef,
+           mg.Sezon + mg.ModelGrup ModelKod,
+           ISNULL(
+           (
+               SELECT SUM(Miktar)
+               FROM dbo.tb_UrunOptionAsortiRecete (NOLOCK)
+               WHERE UrunOptionAsortiRef = d.UrunOptionAsortiRef
+           ),
+           1
+                 ) AmbalajAdet,
+           ug.Marka,
+           ug.Sezon,
+           ug.MerchAltGrup,
+           bg.Tanim,
+           ug.UrunKlasman,
+           ug.KdvAlis,
+           d.SiparisKod,
+           d.UreticiFiyat,
+           Doviz,
+           CONVERT(DATETIME, d.YurtIciUreticiDepoTarihi, 104),
+           RevizeGelecekTarih,
+           GelecekTarih,
+           KumasciKod,
+           0,
+           CONVERT(DATETIME, d.YurtIciUreticiDepoTarihi, 104),
+           KumasFiyatDovizTipi,
+           KumasFiyati,
+           Miktar,
+           CASE
+               WHEN uoa.AsortiTipRef = 11
+                    AND d.Miktar = 1 THEN
+                   d.Miktar
+               ELSE
+                   d.Iptal
+           END Iptal,
+           d.UrunOptionRef,
+           d.UrunOptionAsortiRef,
+           UrunOptionSizeRef,
+           0
+    FROM dbo.tb_AlimSiparisDetaySablon d
+        INNER JOIN dbo.tb_AlimSiparisBaslik b (NOLOCK)
+            ON b.SiparisKod = d.SiparisKod
+        INNER JOIN dbo.tb_ModelGrup mg (NOLOCK)
+            ON mg.Sira = b.ModelGrupRef
+        INNER JOIN dbo.tb_UrunOption uo (NOLOCK)
+            ON uo.UrunOptionRef = d.UrunOptionRef
+        LEFT JOIN dbo.tb_UrunOptionAsorti uoa (NOLOCK)
+            ON uoa.UrunOptionAsortiRef = d.UrunOptionAsortiRef
+        INNER JOIN dbo.tb_UrunGrup ug (NOLOCK)
+            ON ug.ID = uo.ModelRef
+        INNER JOIN Planlama..vw_BuyerGrup bg (NOLOCK)
+            ON bg.UrunKlasman = ug.UrunKlasman
+               AND bg.MerchGrup = ug.MerchGrup
+    WHERE d.SiparisKod = @SiparisNo;
+
+
+
+END;
+
+
+
+DELETE FROM #AlimSiparisDetay
+WHERE Miktar - Iptal <= 0;
+
+
+INSERT INTO #AlimSiparisIthalat
+(
+    SiparisKod,
+    UreticiCarikod,
+    UreticiFirmaRef,
+    KategoriNo,
+    AnlasilanYuklemeTermin,
+    MumessilCarikod,
+    OdemeVade,
+    AnlasilanUretimFiyat,
+    Vasitakod,
+    YuklemeCikisLimani,
+    AraciFirmaCariKod,
+    Mense,
+    KumasMense,
+    IthalatRejimKod,
+    AkreditifNo,
+    IhracatciCariKod,
+    OdemeSekilkod,
+    YuklemeSekilKod,
+    AnlasilanUretimFiyatDoviz,
+    UrunOptionRef,
+    UrunOptionAsortiRef,
+    UrunOptionSizeRef
+)
+SELECT asi.SiparisKod,
+       asi.UreticiCarikod,
+       asi.UreticiFirmaRef,
+       asi.KategoriNo,
+       asi.AnlasilanYuklemeTermin,
+       asi.MumessilCarikod,
+       asi.OdemeVade,
+       AnlasilanUretimFiyat,
+       Vasitakod,
+       YuklemeCikisLimani,
+       AraciFirmaCariKod,
+       Mense,
+       KumasMense,
+       IthalatRejimKod,
+       AkreditifNo,
+       IhracatciCariKod,
+       OdemeSekilkod,
+       YuklemeSekilKod,
+       AnlasilanUretimFiyatDoviz,
+       UrunOptionRef,
+       UrunOptionAsortiRef,
+       UrunOptionSizeRef
+FROM dbo.tb_AlimSiparisIthalat asi (NOLOCK)
+    INNER JOIN tb_Urun u (NOLOCK)
+        ON u.UrunID = asi.UrunID
+WHERE SiparisKod = @SiparisNo;
+
+IF NOT EXISTS (SELECT * FROM #AlimSiparisIthalat)
+BEGIN
+    INSERT INTO #AlimSiparisIthalat
+    SELECT asi.SiparisKod,
+           NULL,
+           NULL,
+           NULL,
+           CONVERT(DATETIME, d.YurtIciUreticiDepoTarihi, 104),
+           asi.MumessilCarikod,
+           asi.OdemeVade,
+           AnlasilanUretimFiyat,
+           Vasitakod,
+           YuklemeCikisLimani,
+           AraciFirmaCariKod,
+           Mense,
+           KumasMense,
+           IthalatRejimKod,
+           AkreditifNo,
+           IhracatciCariKod,
+           OdemeSekilkod,
+           YuklemeSekilKod,
+           AnlasilanUretimFiyatDoviz,
+           asi.UrunOptionRef,
+           asi.UrunOptionAsortiRef,
+           asi.UrunOptionSizeRef
+    FROM dbo.tb_AlimSiparisIthalatSablon asi (NOLOCK)
+        INNER JOIN #AlimSiparisDetay d (NOLOCK)
+            ON asi.SiparisKod = d.SiparisKod
+               AND
+               (
+                   asi.UrunOptionAsortiRef = d.UrunOptionAsortiRef
+                   OR asi.UrunOptionSizeRef = d.UrunOptionSizeRef
+               )
+    WHERE asi.SiparisKod = @SiparisNo;
+END;
+
+
+
+DECLARE @ModelId INT;
+SELECT TOP 1
+       @ModelId = nb.NumuneID
+FROM dbo.tb_Urun_NumuneBaglanti nb (NOLOCK)
+WHERE nb.ModelGrupRef = @ModelGrupRef;
+
+DECLARE @KumasTicariAd NVARCHAR(255);
+SELECT TOP 1
+       @KumasTicariAd = CASE
+                            WHEN ISNULL(KumasTicariAd, '') = '' THEN
+                                ''
+                            ELSE
+                                ISNULL(RTRIM(KumasTicariAd), '') + ' - '
+                        END
+FROM Numune.dbo.TeknikFoyAnaKumas_Tbl (NOLOCK)
+WHERE AnaKumas = 1
+      AND ModelID = @ModelId;
+
+DECLARE @Kumas_Kodu VARCHAR(20);
+SELECT TOP 1
+       @Kumas_Kodu = Kumas_Kodu
+FROM Numune.dbo.TeknikFoyAnaKumas_Tbl (NOLOCK)
+WHERE AnaKumas = 1
+      AND ModelID = @ModelId;
+
+DECLARE @Kumasad VARCHAR(1000);
+SELECT TOP 1
+       @Kumasad = Ad
+FROM tb_UrunGrupKumas (NOLOCK)
+WHERE Kumaskod = @Kumas_Kodu;
+
+
+DECLARE @RevizyonNo INT;
+SELECT @RevizyonNo = MAX(RevizyonNo)
+FROM tb_AlimsiparisIthalatRevizyonBaslik rv (NOLOCK)
+WHERE rv.Sipariskod = @SiparisNo;
+
+DECLARE @KumasciBooking VARCHAR(255) = '';
+SET @KumasciBooking = ISNULL(
+                      (
+                          SELECT DISTINCT
+                                 CAST(BookingID AS VARCHAR(10)) + ','
+                          FROM dbo.tb_KumasciSiparisBooking ksb (NOLOCK)
+                          WHERE ksb.SiparisKod = @SiparisNo
+                          FOR XML PATH('')
+                      ),
+                      ''
+                            );
+
+
+
+DECLARE @ModelAd VARCHAR(50);
+DECLARE @OzelKod1 VARCHAR(8);
+SELECT TOP 1
+       @ModelAd = ugk.Ad,
+       @OzelKod1 = ugk.OzelKod1
+FROM tb_UrunGrup ugk (NOLOCK)
+WHERE ugk.UrunKartTipRef = 14
+      AND ugk.ModelGrupRef = @ModelGrupRef;
+
+DECLARE @LastRevisionDate DATETIME =
+        (
+            SELECT TOP 1
+                   header.CreatedDate
+            FROM ANKA.tb_OrderChangeRequestDetail (NOLOCK) detail
+                INNER JOIN ANKA.tb_OrderChangeRequestHeader header
+                    ON header.Id = detail.OrderChangeRequestHeaderId
+            WHERE detail.OrderCode = @SiparisNo
+        );
+
+CREATE TABLE [#AlmSipRaporBaslik]
+(
+    [Kumas] VARCHAR(2000),
+    [ModelAd] VARCHAR(100),
+    [SiparisKod] INT,
+    [UreticiCariKod] VARCHAR(100),
+    [MumessilCariKod] VARCHAR(100),
+    [Marka] VARCHAR(4),
+    Line VARCHAR(1),
+    [KategoriNo] INT,
+    [OdemeSekilKod] INT,
+    [AnlasilanUretimFiyat] FLOAT,
+    [AnlasilanUretimFiyatDoviz] VARCHAR(50),
+    [MaliyetFiyat] FLOAT,
+    [MaliyetFiyatDoviz] VARCHAR(50),
+    [Sezon] VARCHAR(10),
+    [MerchAltGrup] VARCHAR(50),
+    [BuyerGrupTanim] VARCHAR(500),
+    [UrunKlasman] INT,
+    [Vasitakod] INT,
+    [YuklemeSekilKod] INT,
+    [YuklemeCikisLimani] INT,
+    [ToplamSiparis] INT,
+    [AnlasilanYuklemeTermin] DATETIME,
+    [IstenenTestler] VARCHAR(2000),
+    [PaketlemeDetaylari] VARCHAR(2000),
+    [EkDetaylar] VARCHAR(2000),
+    [Sartlar] VARCHAR(2000),
+    [GecikmeSartlari] VARCHAR(2000),
+    [IstenenTestler_En] VARCHAR(2000),
+    [PaketlemeDetaylari_En] VARCHAR(2000),
+    [EkDetaylar_En] VARCHAR(2000),
+    [Sartlar_En] VARCHAR(2000),
+    [GecikmeSartlari_En] VARCHAR(2000),
+    [Grup] INT,
+    [maxRevizyonNo] INT,
+    [LastRevisionDate] DATETIME,
+    [IlkSiparisTarihi] DATETIME NOT NULL,
+    [DepoTeslimTarihi] VARCHAR(255),
+    [ResimModel] VARCHAR(100),
+    [UreticiFirmaRef] INT,
+    [KDV] DECIMAL(10, 2) NOT NULL,
+    [KumasciCariKod] VARCHAR(50),
+    [VIP] BIT,
+    [KumasFiyati] VARCHAR(500),
+    [KumasFiyatDoviz] VARCHAR(50),
+    [OrginalFabrikaCikisTarih] DATETIME,
+    SellingRegion INT,
+    [ExpressSiparis] BIT,
+    [OdemeVade] VARCHAR(300),
+    [KumasciBookingId] VARCHAR(255),
+    [UrunOptionRef] INT,
+    [UrunOptionAsortiRef] INT,
+    [UrunOptionSizeRef] INT,
+    --[EnGecDepoTeslimTarihi]VARCHAR(10),
+    [JIT] INT
+);
+
+
+
+INSERT INTO [#AlmSipRaporBaslik]
+SELECT DISTINCT
+       ISNULL(ISNULL(@KumasTicariAd, '') + @Kumasad, '') Kumas,
+       @ModelAd ModelAd,
+       asd.SiparisKod,    --, u.UrunID
+       COALESCE(asi.UreticiCarikod, asb.CariKod, '') UreticiCariKod,
+       ISNULL(asi.MumessilCarikod, '') MumessilCariKod,
+       asd.Marka,
+       ' ' Line,
+       ISNULL(asi.KategoriNo, '') KategoriNo,
+       ISNULL(asi.OdemeSekilkod, '') OdemeSekilKod,
+       ISNULL(asi.AnlasilanUretimFiyat, '') AnlasilanUretimFiyat,
+       ISNULL(asi.AnlasilanUretimFiyatDoviz, '') AnlasilanUretimFiyatDoviz,
+       asd.Fiyat MaliyetFiyat,
+       CASE
+           WHEN ISNULL(asd.Doviz, '') = '' THEN
+               'TL'
+           ELSE
+               ISNULL(asd.Doviz, '')
+       END MaliyetFiyatDoviz,
+       asd.Sezon,
+       asd.MerchAltGrup,
+       asd.BuyerGrupTanim,
+       asd.UrunKlasman,
+       ISNULL(asi.Vasitakod, '') Vasitakod,
+       COALESCE(asi.YuklemeSekilKod, '') YuklemeSekilKod,
+       ISNULL(asi.YuklemeCikisLimani, '') YuklemeCikisLimani,
+       0 ToplamSiparis,
+       COALESCE(asd.YurtIciUreticiDepoTarihi, asi.AnlasilanYuklemeTermin, '') AnlasilanYuklemeTermin,
+       COALESCE(st.IstenenTestler, '') IstenenTestler,
+       COALESCE(st.PaketlemeDetaylari, '') PaketlemeDetaylari,
+       CASE @KumasciBooking
+           WHEN '' THEN
+               ''
+           ELSE
+               COALESCE(st.EkDetaylar, '')
+       END EkDetaylar,
+       COALESCE(st.Sartlar, '') Sartlar,
+       COALESCE(st.GecikmeSartlari, '') GecikmeSartlari,
+       COALESCE(st.IstenenTestler_En, '') IstenenTestler_En,
+       COALESCE(st.PaketlemeDetaylari_En, '') PaketlemeDetaylari_En,
+       CASE @KumasciBooking
+           WHEN '' THEN
+               ''
+           ELSE
+               COALESCE(st.EkDetaylar_En, '')
+       END EkDetaylar_En,
+       COALESCE(st.Sartlar_En, '') Sartlar_En,
+       COALESCE(st.GecikmeSartlari_En, '') GecikmeSartlari_En,
+       0 Grup,            --coalesce(r.Revizyon3,'') Revizyon3,               
+       'maxRevizyonNo' = ISNULL(@RevizyonNo, 0),
+       @LastRevisionDate AS LastRevisionDate,
+       asb.Tarih IlkSiparisTarihi,
+       COALESCE(asd.RevizeGelecekTarih, asd.GelecekTarih, '') DepoTeslimTarihi,
+       LEFT(asd.ModelKod, 6) ResimModel,
+       COALESCE(asi.UreticiFirmaRef, '') UreticiFirmaRef,
+       KDV.Deger KDV,
+       ISNULL(asd.KumasciCarikod, '') AS KumasciCariKod,
+       asd.VIP,
+                          --,asd.KumasFiyati          
+       (
+           SELECT
+               (
+                   SELECT CAST(ROW_NUMBER() OVER (ORDER BY asd.ModelKod) AS VARCHAR) + ' - '
+                          + CAST(ISNULL(A.KumasFiyati, 0) AS VARCHAR) + ' ' + ISNULL(D.Kod, '') + '; '
+                   FROM #AlimSiparisDetay A (NOLOCK)
+                       LEFT JOIN dbo.tb_Doviz D (NOLOCK)
+                           ON D.DovizRef = A.KumasFiyatDoviz
+                   WHERE A.UrunOptionAsortiRef IS NOT NULL
+                   ORDER BY asd.ModelKod
+                   FOR XML PATH('')
+               )
+       ) KumasFiyati,
+       '' KumasFiyatDoviz,
+       asd.OrginalFabrikaCikisTarih,
+       asd.SellingRegion, --,asd.ExpressSiparis    
+       dbo.fnk_FastTrackSiparismi(asd.SiparisKod) ExpressSiparis,
+       asi.OdemeVade,
+       @KumasciBooking KumasciBookingId,
+       asd.UrunOptionRef,
+       asd.UrunOptionAsortiRef,
+       asd.UrunOptionSizeRef,
+                          --CASE
+                          --	WHEN ISNULL(odd.FirstLatestInspectionDate,0) = 0 THEN
+                          --CONVERT(VARCHAR(10),dbo.fnk_AlimSiparisEnGecDepoTeslimTarihi(asd.SiparisKod,asd.UrunOptionRef),104)
+                          --ELSE CONVERT(VARCHAR(10),odd.FirstLatestInspectionDate,104) END EnGecDepoTeslimTarihi,
+       ISNULL(etiket.Jit, 0) JIT
+-- into       #AlmSipRaporBaslik
+FROM #AlimSiparisDetay asd (NOLOCK)
+    INNER JOIN tb_AlimSiparisBaslik asb (NOLOCK)
+        ON asb.SiparisKod = asd.SiparisKod
+    LEFT JOIN tb_UrunKlasman uk (NOLOCK)
+        ON uk.Kod = asd.UrunKlasman
+           AND TedarikGrupKod = 8
+    LEFT JOIN #AlimSiparisIthalat asi (NOLOCK)
+        ON asi.SiparisKod = asd.SiparisKod
+           AND
+           (
+               asi.UrunOptionSizeRef = asd.UrunOptionSizeRef
+               OR asi.UrunOptionAsortiRef = asd.UrunOptionAsortiRef
+           ) --and asi.UrunID = asd.UrunID
+    LEFT JOIN tb_AlimSiparisIstenenAciklamalarSabitTanimlar st (NOLOCK)
+        ON st.Kod = COALESCE(   (CASE
+                                     WHEN uk.TedarikGrupKod = 8
+                                          AND uk.AnaGrupKod = 2 THEN
+                                         2
+                                     ELSE
+                                         CASE
+                                             WHEN uk.TedarikGrupKod = 8
+                                                  AND uk.AnaGrupKod = 1 THEN
+                                                 3
+                                             ELSE
+                                                 1
+                                         END
+                                 END
+                                ),
+                                1
+                            )
+    LEFT JOIN tb_UrunFiyat uf (NOLOCK)
+        ON uf.UrunGrupRef = asd.UrunGrupRef
+           AND uf.FiyatKod = 'I1'
+    LEFT JOIN dbo.tb_Kdv KDV (NOLOCK)
+        ON KDV.Kod = asd.KDVAlis
+    --left JOIN dbo.tb_OrderDetailDates odd (NOLOCK) ON odd.UrunOptionRef = asd.UrunOptionRef AND odd.OrderCode = asd.SiparisKod
+    LEFT JOIN ANKA.tb_AlimSiparisEtiket etiket (NOLOCK)
+        ON etiket.OrderCode = asb.SiparisKod
+           AND etiket.UrunOptionRef = asd.UrunOptionRef;
+
+
+UPDATE #AlmSipRaporBaslik
+SET KumasciBookingId = LEFT(KumasciBookingId, LEN(KumasciBookingId) - 1)
+WHERE LEN(KumasciBookingId) > 0;
+
+SELECT DISTINCT
+       rb.SiparisKod,
+       rb.Kumas,
+       rb.ModelAd,
+       rb.UreticiCariKod,
+       rb.MumessilCariKod,
+       rb.Marka,
+       rb.KategoriNo,
+       rb.OdemeSekilKod,
+       rb.AnlasilanUretimFiyat,
+       rb.AnlasilanUretimFiyatDoviz,
+       rb.MaliyetFiyat,
+       rb.MaliyetFiyatDoviz,
+       rb.Sezon,
+       rb.MerchAltGrup,
+       rb.BuyerGrupTanim,
+       rb.UrunKlasman,
+       rb.Vasitakod,
+       rb.YuklemeSekilKod,
+       rb.YuklemeCikisLimani,
+       rb.ToplamSiparis,
+       rb.AnlasilanYuklemeTermin,
+       rb.IstenenTestler,
+       rb.PaketlemeDetaylari,
+       rb.EkDetaylar,
+       rb.Sartlar,
+       rb.GecikmeSartlari,
+       rb.IstenenTestler_En,
+       rb.PaketlemeDetaylari_En,
+       rb.EkDetaylar_En,
+       rb.Sartlar_En,
+       rb.GecikmeSartlari_En, --Revizyon3,              
+                      --Revizyon2,              
+                      --Revizyon1 ,               
+       maxRevizyonNo, --DepoTeslimTarihi,              
+       ResimModel,    --    MaxRevizyonTarih ,               
+       IlkSiparisTarihi,
+       UreticiFirmaRef,
+       KDV,
+       KumasciCariKod,
+       VIP,
+       rb.KumasFiyati,
+       rb.KumasFiyatDoviz,
+       rb.OrginalFabrikaCikisTarih,
+       rb.SellingRegion,
+       rb.LastRevisionDate,
+       rb.ExpressSiparis,
+       rb.OdemeVade,
+       rb.KumasciBookingId,
+       rb.JIT         --, UrunOptionRef, UrunOptionAsortiRef, UrunOptionSizeRef
+INTO #Axx
+FROM #AlmSipRaporBaslik rb;
+
+SELECT IDENTITY(INT, 1, 1) Sira,
+       *
+INTO #ARaporSayfa
+FROM #Axx;
+DROP TABLE #Axx;
+
+
+UPDATE rb
+SET Grup = x.Sira
+FROM #AlmSipRaporBaslik rb,
+     #ARaporSayfa x
+WHERE rb.SiparisKod = x.SiparisKod
+      AND rb.Kumas = x.Kumas
+      AND rb.ModelAd = x.ModelAd
+      AND rb.UreticiCariKod = x.UreticiCariKod
+      AND rb.MumessilCariKod = x.MumessilCariKod
+      AND rb.Marka = x.Marka
+      AND rb.KategoriNo = x.KategoriNo
+      AND rb.OdemeSekilKod = x.OdemeSekilKod
+      AND rb.AnlasilanUretimFiyat = x.AnlasilanUretimFiyat
+      AND rb.AnlasilanUretimFiyatDoviz = x.AnlasilanUretimFiyatDoviz
+      AND rb.MaliyetFiyat = x.MaliyetFiyat
+      AND rb.MaliyetFiyatDoviz = x.MaliyetFiyatDoviz
+      AND rb.Sezon = x.Sezon
+      AND rb.MerchAltGrup = x.MerchAltGrup
+      AND rb.BuyerGrupTanim = x.BuyerGrupTanim
+      AND rb.UrunKlasman = x.UrunKlasman
+      AND rb.Vasitakod = x.Vasitakod
+      AND rb.YuklemeSekilKod = x.YuklemeSekilKod
+      AND rb.YuklemeCikisLimani = x.YuklemeCikisLimani
+      AND rb.ToplamSiparis = x.ToplamSiparis
+      AND rb.AnlasilanYuklemeTermin = x.AnlasilanYuklemeTermin
+      AND rb.IstenenTestler = x.IstenenTestler
+      AND rb.PaketlemeDetaylari = x.PaketlemeDetaylari
+      AND rb.EkDetaylar = x.EkDetaylar
+      AND rb.Sartlar = x.Sartlar
+      AND rb.GecikmeSartlari = x.GecikmeSartlari
+      AND rb.IstenenTestler_En = x.IstenenTestler_En
+      AND rb.PaketlemeDetaylari_En = x.PaketlemeDetaylari_En
+      AND rb.EkDetaylar_En = x.EkDetaylar_En
+      AND rb.Sartlar_En = x.Sartlar_En
+      AND rb.GecikmeSartlari_En = x.GecikmeSartlari_En
+      AND rb.maxRevizyonNo = x.maxRevizyonNo
+      AND rb.ResimModel = x.ResimModel
+      AND rb.UreticiFirmaRef = x.UreticiFirmaRef
+      AND rb.KDV = x.KDV
+      AND rb.KumasciCariKod = x.KumasciCariKod
+      AND rb.OrginalFabrikaCikisTarih = x.OrginalFabrikaCikisTarih --and  isnull(rb.EnGecDepoTeslimTarihi,'01.01.1900')=isnull(x.EnGecDepoTeslimTarihi,'01.01.1900')
+      AND rb.SellingRegion = x.SellingRegion
+      AND rb.JIT = x.JIT;
+--and rb.UrunOptionRef = x.UrunOptionRef and isnull(rb.UrunOptionAsortiRef,0) = isnull(x.UrunOptionAsortiRef,0)
+--   and isnull(rb.UrunOptionSizeRef,0) = isnull(x.UrunOptionSizeRef,0);
+--SELECT Grup,* FROM #AlmSipRaporBaslik
+--SELECT * FROM #ARaporSayfa
+
+
+SELECT DISTINCT
+       asd.SiparisKod,
+       asd.ModelKod OzelKod1,
+       RTRIM(r.Tanim) + '-' + r.Kod Renk,
+       asd.AmbalajAdet,
+       ((asd.Miktar - asd.Iptal) / asd.AmbalajAdet) NetSiparis,
+       (asd.Miktar - asd.Iptal) ToplamAdet,
+       uoar.Miktar Miktar,
+       RTRIM(REPLACE(st.SizeKisaKod, '+', '_')) Beden,
+       RTRIM(REPLACE(st.SizeKisaKod, '+', '_')) + CASE
+                                                      WHEN RTRIM(COALESCE(uos.Boy, '')) = '' THEN
+                                                          ''
+                                                      ELSE
+                                                          '-' + RTRIM(COALESCE(uos.Boy, ''))
+                                                  END Beden_Boy,
+       asb.Grup,
+       st.Id SizeRef,
+       CASE
+           WHEN RTRIM(COALESCE(uos.Boy, '')) = '' THEN
+               ''
+           ELSE
+               RTRIM(COALESCE(uos.Boy, ''))
+       END Boy,
+       asd.UrunOptionRef,
+       asd.UrunOptionAsortiRef,
+       asd.UrunOptionSizeRef,
+       asd.OrginalFabrikaCikisTarih,
+       asd.SellingRegion
+INTO #Crossonuc11
+FROM #AlimSiparisDetay asd (NOLOCK)
+    INNER JOIN #AlmSipRaporBaslik asb (NOLOCK)
+        ON asb.UrunOptionAsortiRef = asd.UrunOptionAsortiRef
+           AND asb.OrginalFabrikaCikisTarih = asd.OrginalFabrikaCikisTarih
+           AND asb.SellingRegion = asd.SellingRegion
+    INNER JOIN dbo.tb_UrunOption uo (NOLOCK)
+        ON uo.UrunOptionRef = asd.UrunOptionRef
+    INNER JOIN dbo.tb_UrunOptionAsortiRecete uoar (NOLOCK)
+        ON uoar.UrunOptionAsortiRef = asd.UrunOptionAsortiRef
+    INNER JOIN dbo.tb_UrunOptionSize uos (NOLOCK)
+        ON uos.UrunOptionSizeRef = uoar.UrunOptionSizeRef
+    INNER JOIN dbo.tb_SizeTanim st (NOLOCK)
+        ON st.Id = uos.SizeRef
+    INNER JOIN tb_Renk r (NOLOCK)
+        ON r.RenkRef = uo.RenkRef
+    INNER JOIN dbo.tb_Urun u (NOLOCK)
+        ON u.UrunOptionRef = asd.UrunOptionRef
+WHERE asd.UrunOptionAsortiRef IS NOT NULL
+UNION
+SELECT DISTINCT
+       asd.SiparisKod,
+       asd.ModelKod OzelKod1,
+       RTRIM(r.Tanim) + '-' + r.Kod Renk,
+       asd.AmbalajAdet,
+       asd.Miktar - asd.Iptal NetSiparis,
+       (asd.Miktar - asd.Iptal) ToplamAdet,
+       asd.Miktar - asd.Iptal Miktar,
+       RTRIM(REPLACE(st.SizeKisaKod, '+', '_')) Beden,
+       RTRIM(REPLACE(st.SizeKisaKod, '+', '_')) + CASE
+                                                      WHEN RTRIM(COALESCE(uos.Boy, '')) = '' THEN
+                                                          ''
+                                                      ELSE
+                                                          '-' + RTRIM(COALESCE(uos.Boy, ''))
+                                                  END Beden_Boy,
+       asb.Grup,
+       st.Id SizeRef,
+       CASE
+           WHEN RTRIM(COALESCE(uos.Boy, '')) = '' THEN
+               ''
+           ELSE
+               RTRIM(COALESCE(uos.Boy, ''))
+       END Boy,
+       asd.UrunOptionRef,
+       asd.UrunOptionAsortiRef,
+       asd.UrunOptionSizeRef,
+       asd.OrginalFabrikaCikisTarih,
+       asd.SellingRegion
+FROM #AlimSiparisDetay asd (NOLOCK)
+    INNER JOIN #AlmSipRaporBaslik asb (NOLOCK)
+        ON asb.UrunOptionSizeRef = asd.UrunOptionSizeRef
+           AND asb.OrginalFabrikaCikisTarih = asd.OrginalFabrikaCikisTarih
+           AND asb.SellingRegion = asd.SellingRegion
+    INNER JOIN dbo.tb_UrunOption uo (NOLOCK)
+        ON uo.UrunOptionRef = asd.UrunOptionRef
+    INNER JOIN dbo.tb_UrunOptionSize uos (NOLOCK)
+        ON uos.UrunOptionSizeRef = asd.UrunOptionSizeRef
+    INNER JOIN dbo.tb_SizeTanim st (NOLOCK)
+        ON st.Id = uos.SizeRef
+    INNER JOIN tb_Renk r (NOLOCK)
+        ON r.RenkRef = uo.RenkRef
+    INNER JOIN dbo.tb_Urun u (NOLOCK)
+        ON u.UrunOptionRef = asd.UrunOptionRef
+WHERE asd.UrunOptionSizeRef IS NOT NULL;
+
+
+SELECT c.SiparisKod,
+       c.OzelKod1,
+       c.Renk,
+       c.AmbalajAdet,
+       c.NetSiparis,
+       c.ToplamAdet,
+       c.Miktar,
+       c.Beden_Boy,
+       c.Grup,
+       ISNULL(d.BedenSira, 0) BedenSira,
+       c.Beden,
+       c.SizeRef,
+       c.Boy,
+       c.UrunOptionRef,
+       c.UrunOptionAsortiRef,
+       c.UrunOptionSizeRef,
+       c.OrginalFabrikaCikisTarih,
+       c.SellingRegion
+INTO #Crossonuc22
+FROM #Crossonuc11 c
+    LEFT JOIN tb_BedenSira d (NOLOCK)
+        ON d.Beden = REPLACE(c.Beden_Boy, '_', '+');
+
+
+SELECT IDENTITY(INT, 1, 1) Sira,
+       *
+INTO #Crossonuc
+FROM #Crossonuc22
+ORDER BY BedenSira;
+
+SELECT DISTINCT
+       Beden_Boy, --'_' + Beden_Boy Beden_Boy,              
+       BedenSira,
+       Beden,
+       SizeRef,
+       Boy
+INTO #yensonuc1
+FROM #Crossonuc c
+--Left JOIN #Bedensira b ON b.Beden=c.Beden_Boy              
+ORDER BY BedenSira;
+
+
+
+SELECT IDENTITY(INT, 1, 1) Sira,
+       y.Beden_Boy, --'_' + Beden_Boy Beden_Boy,              
+       y.BedenSira,
+       CASE y.SizeRef
+           WHEN 0 THEN
+               y.[Beden] + y.Boy
+           ELSE
+               ISNULL(st.Tanim, y.[Beden]) + y.Boy
+       END Beden
+INTO #yensonuc
+FROM #yensonuc1 y
+    LEFT JOIN dbo.tb_SizeTanim st (NOLOCK)
+        ON st.Id = y.SizeRef
+ORDER BY BedenSira,
+         ISNULL(st.Tanim, y.[Beden]) + y.Boy;
+
+
+DROP TABLE #yensonuc1;
+DROP TABLE #Crossonuc22;
+DROP TABLE #Crossonuc11;
+
+DECLARE @bed_Boy CHAR(10);
+DECLARE @str_tablo VARCHAR(5000);
+DECLARE @str_Sum VARCHAR(5000);
+DECLARE @tempsayac INT;
+
+SET @str_tablo = '';
+SET @str_Sum = '';
+SET @tempsayac = 1;
+
+WHILE @tempsayac <= 54
+BEGIN
+    --select  @bed_Boy=Beden_Boy from #yensonuc where Sira=@tempsayac              
+    SET @str_tablo = @str_tablo + ',BedenSum' + CAST(@tempsayac AS VARCHAR(2)) + ' int ';
+    SET @str_Sum
+        = @str_Sum + ',sum( isnull(BedenSum' + CAST(@tempsayac AS VARCHAR(2)) + ',0)) BedenSum'
+          + CAST(@tempsayac AS VARCHAR(2));
+    SET @tempsayac = @tempsayac + 1;
+END;
+
+
+CREATE TABLE #tablo
+(
+    [RID] [INT] IDENTITY(1, 1) NOT NULL,
+    Grup INT,
+    OzelKod1 CHAR(8),
+    Renk CHAR(30),
+    --,Line char(30)
+    AmbalajAdet INT,
+    NetSiparis INT,
+    ToplamAdet NUMERIC,
+    UrunOptionRef INT,
+    UrunOptionAsortiRef INT,
+    UrunOptionSizeRef INT,
+    OrginalFabrikaCikisTarih DATETIME,
+    SellingRegion INT,
+    BedenSum1 INT,
+    BedenSum2 INT,
+    BedenSum3 INT,
+    BedenSum4 INT,
+    BedenSum5 INT,
+    BedenSum6 INT,
+    BedenSum7 INT,
+    BedenSum8 INT,
+    BedenSum9 INT,
+    BedenSum10 INT,
+    BedenSum11 INT,
+    BedenSum12 INT,
+    BedenSum13 INT,
+    BedenSum14 INT,
+    BedenSum15 INT,
+    BedenSum16 INT,
+    BedenSum17 INT,
+    BedenSum18 INT,
+    BedenSum19 INT,
+    BedenSum20 INT,
+    BedenSum21 INT,
+    BedenSum22 INT,
+    BedenSum23 INT,
+    BedenSum24 INT,
+    BedenSum25 INT,
+    BedenSum26 INT,
+    BedenSum27 INT,
+    BedenSum28 INT,
+    BedenSum29 INT,
+    BedenSum30 INT,
+    BedenSum31 INT,
+    BedenSum32 INT,
+    BedenSum33 INT,
+    BedenSum34 INT,
+    BedenSum35 INT,
+    BedenSum36 INT,
+    BedenSum37 INT,
+    BedenSum38 INT,
+    BedenSum39 INT,
+    BedenSum40 INT,
+    BedenSum41 INT,
+    BedenSum42 INT,
+    BedenSum43 INT,
+    BedenSum44 INT,
+    BedenSum45 INT,
+    BedenSum46 INT,
+    BedenSum47 INT,
+    BedenSum48 INT,
+    BedenSum49 INT,
+    BedenSum50 INT,
+    BedenSum51 INT,
+    BedenSum52 INT,
+    BedenSum53 INT,
+    BedenSum54 INT
+);
+
+
+--exec ('create table #tablo  (    [RID] [int] IDENTITY (1, 1) NOT NULL , Grup int,OzelKod1 char(8), Renk char(30) ,Line char(30) ,AmbalajAdet int,NetSiparis int,ToplamAdet numeric,UrunOptionRef int,UrunOptionAsortiRef int,UrunOptionSizeRef int' + @str_tablo + ')');
+DECLARE @Sira CHAR(4);
+DECLARE cr_CrossTum INSENSITIVE CURSOR FOR
+SELECT Sira,
+       Beden_Boy
+FROM #Crossonuc
+ORDER BY Sira;
+OPEN cr_CrossTum;
+FETCH NEXT FROM cr_CrossTum
+INTO @Sira,
+     @bed_Boy;
+WHILE @@fetch_status = 0
+BEGIN
+    DECLARE @tempsira INT;
+    SELECT @tempsira = Sira
+    FROM #yensonuc
+    WHERE Beden_Boy = @bed_Boy;
+
+    EXEC ('insert into #tablo (Grup,OzelKod1,Renk,AmbalajAdet,NetSiparis,ToplamAdet,UrunOptionRef,UrunOptionAsortiRef,UrunOptionSizeRef,OrginalFabrikaCikisTarih, SellingRegion, BedenSum' + @tempsira + ' )              
+                select Grup,OzelKod1,Renk,AmbalajAdet,NetSiparis,ToplamAdet,UrunOptionRef,UrunOptionAsortiRef,UrunOptionSizeRef ,OrginalFabrikaCikisTarih, SellingRegion, Miktar from #Crossonuc where Sira =  ' + @Sira + ' ');
+    FETCH NEXT FROM cr_CrossTum
+    INTO @Sira,
+         @bed_Boy;
+END;
+CLOSE cr_CrossTum;
+DEALLOCATE cr_CrossTum;
+
+
+
+
+CREATE TABLE #sncPO1
+(
+    BaslikSayi INT,
+    Sayfa INT,
+    SayfaTip INT,
+    Grup INT,
+    [COLOR] VARCHAR(50),
+    --,Line varchar(3)
+    [SPECIAL CODE] VARCHAR(50),
+    SellingRegion INT,
+    OrginalFabrikaCikisTarih DATETIME,
+    BedenSum1 INT,
+    BedenSum2 INT,
+    BedenSum3 INT,
+    BedenSum4 INT,
+    BedenSum5 INT,
+    BedenSum6 INT,
+    BedenSum7 INT,
+    BedenSum8 INT,
+    BedenSum9 INT,
+    BedenSum10 INT,
+    BedenSum11 INT,
+    BedenSum12 INT,
+    BedenSum13 INT,
+    BedenSum14 INT,
+    BedenSum15 INT,
+    BedenSum16 INT,
+    BedenSum17 INT,
+    BedenSum18 INT,
+    BedenSum19 INT,
+    BedenSum20 INT,
+    BedenSum21 INT,
+    BedenSum22 INT,
+    BedenSum23 INT,
+    BedenSum24 INT,
+    BedenSum25 INT,
+    BedenSum26 INT,
+    BedenSum27 INT,
+    BedenSum28 INT,
+    BedenSum29 INT,
+    BedenSum30 INT,
+    BedenSum31 INT,
+    BedenSum32 INT,
+    BedenSum33 INT,
+    BedenSum34 INT,
+    BedenSum35 INT,
+    BedenSum36 INT,
+    BedenSum37 INT,
+    BedenSum38 INT,
+    BedenSum39 INT,
+    BedenSum40 INT,
+    BedenSum41 INT,
+    BedenSum42 INT,
+    BedenSum43 INT,
+    BedenSum44 INT,
+    BedenSum45 INT,
+    BedenSum46 INT,
+    BedenSum47 INT,
+    BedenSum48 INT,
+    BedenSum49 INT,
+    BedenSum50 INT,
+    BedenSum51 INT,
+    BedenSum52 INT,
+    BedenSum53 INT,
+    BedenSum54 INT,
+    [PIECES PER BOX] INT,
+    [NO. OF BOXES] INT,
+    [NON ASSORTED PIECES] INT,
+    [TOTAL PIECES] INT,
+    Kolimi BIT
+);
+
+SELECT *
+INTO #sncPO22
+FROM #sncPO1;
+
+
+IF EXISTS
+(
+    SELECT 1
+    FROM #AlimSiparisDetay asd (NOLOCK)
+    WHERE asd.UrunOptionAsortiRef IS NOT NULL
+)
+   AND EXISTS
+(
+    SELECT 1
+    FROM #AlimSiparisDetay asd (NOLOCK)
+    WHERE asd.UrunOptionSizeRef IS NOT NULL
+)
+BEGIN
+    --if object_id('tempdb..#sncPO1') is not null drop table #sncPO1;
+    --if object_id('tempdb..#sncPO22') is not null drop table #sncPO22;
+
+
+
+    EXEC ('insert into #sncPO1 
+		select    ( select count(distinct Beden_Boy) from #Crossonuc ) BaslikSayi,0 Sayfa,0 SayfaTip,Grup              
+                , Renk [COLOR] , cast(OzelKod1 as varchar(50)) [SPECIAL CODE],SellingRegion, OrginalFabrikaCikisTarih ' + @str_Sum + '
+                , AmbalajAdet [PIECES PER BOX] ,NetSiparis [NO. OF BOXES],NetSiparis [NON ASSORTED PIECES],ToplamAdet [TOTAL PIECES], case when UrunOptionSizeRef is not null then 0 else 1 end Kolimi from #tablo where AmbalajAdet > 1               
+                group by Grup,OzelKod1,Renk,SellingRegion,OrginalFabrikaCikisTarih,AmbalajAdet,NetSiparis,ToplamAdet, case when UrunOptionSizeRef is not null then 0 else 1 end');
+
+    EXEC ('insert into #sncPO1               
+                select    ( select count(distinct Beden_Boy) from #Crossonuc ) BaslikSayi,0 Sayfa,0 SayfaTip,Grup              
+                , Renk [COLOR], cast(OzelKod1 as varchar(50)) [SPECIAL CODE],SellingRegion,OrginalFabrikaCikisTarih ' + @str_Sum + '              
+                ,AmbalajAdet [PIECES PER BOX] ,NetSiparis [NO. OF BOXES],NetSiparis [NON ASSORTED PIECES]
+				,ToplamAdet [TOTAL PIECES], case when UrunOptionSizeRef is not null then 0 else 1 end Kolimi from #tablo where AmbalajAdet = 1               
+                group by RID,Grup,OzelKod1,SellingRegion,Renk,OrginalFabrikaCikisTarih,AmbalajAdet,NetSiparis,ToplamAdet, case when UrunOptionSizeRef is not null then 0 else 1 end');
+
+
+
+    INSERT INTO #sncPO22
+    SELECT *
+    FROM #sncPO1;
+
+END;
+ELSE
+BEGIN
+
+    IF EXISTS
+    (
+        SELECT 1
+        FROM #AlimSiparisDetay asd (NOLOCK)
+        WHERE asd.UrunOptionAsortiRef IS NOT NULL
+    )
+    BEGIN
+
+        EXEC ('insert into #sncPO22 
+			select  ( select count(distinct Beden_Boy) from #Crossonuc ) BaslikSayi,0 Sayfa,0 SayfaTip,Grup              
+                        , Renk [COLOR] , cast(OzelKod1 as varchar(50)) [SPECIAL CODE],SellingRegion,OrginalFabrikaCikisTarih ' + @str_Sum + '              
+                        ,AmbalajAdet [PIECES PER BOX] ,NetSiparis [NO. OF BOXES],NetSiparis [NON ASSORTED PIECES]
+						,ToplamAdet [TOTAL PIECES], case when UrunOptionSizeRef is not null then 0 else 1 end Kolimi 
+						 from #tablo               
+                        group by Grup,OzelKod1,Renk,OrginalFabrikaCikisTarih,SellingRegion,AmbalajAdet,NetSiparis,ToplamAdet, 
+						case when UrunOptionSizeRef is not null then 0 else 1 end');
+    END;
+    ELSE
+    BEGIN
+
+        PRINT 'insert into #sncPO22
+	  select  ( select count(distinct Beden_Boy) from #Crossonuc ) BaslikSayi,0 Sayfa,0 SayfaTip,Grup              
+                        , Renk [COLOR] ,cast(OzelKod1 as varchar(50)) [SPECIAL CODE],SellingRegion,OrginalFabrikaCikisTarih  '
+              + @str_Sum
+              + '              
+                        ,AmbalajAdet [PIECES PER BOX] ,NetSiparis [NO. OF BOXES],NetSiparis [NON ASSORTED PIECES],ToplamAdet [TOTAL PIECES], 
+						case when UrunOptionSizeRef is not null then 0 else 1 end Kolimi   from #tablo               
+                        group by RID,Grup,OzelKod1,Renk,OrginalFabrikaCikisTarih,SellingRegion,AmbalajAdet,NetSiparis,ToplamAdet, case when UrunOptionSizeRef is not null then 0 else 1 end';
+        EXEC ('insert into #sncPO22
+	  select  ( select count(distinct Beden_Boy) from #Crossonuc ) BaslikSayi,0 Sayfa,0 SayfaTip,Grup              
+                        , Renk [COLOR] ,cast(OzelKod1 as varchar(50)) [SPECIAL CODE],SellingRegion,OrginalFabrikaCikisTarih  ' + @str_Sum + '              
+                        , AmbalajAdet [PIECES PER BOX] ,NetSiparis [NO. OF BOXES],NetSiparis [NON ASSORTED PIECES],ToplamAdet [TOTAL PIECES], 
+						case when UrunOptionSizeRef is not null then 0 else 1 end Kolimi   from #tablo               
+                        group by RID,Grup,OzelKod1,Renk,OrginalFabrikaCikisTarih,SellingRegion,AmbalajAdet,NetSiparis,ToplamAdet, case when UrunOptionSizeRef is not null then 0 else 1 end');
+    END;
+END;
+DROP TABLE #sncPO1;
+
+UPDATE #sncPO22
+SET [PIECES PER BOX] = CASE
+                           WHEN Kolimi = 0 THEN
+                               0
+                           ELSE
+                               [PIECES PER BOX]
+                       END,
+    [NO. OF BOXES] = CASE
+                         WHEN Kolimi = 0 THEN
+                             0
+                         ELSE
+                             [NO. OF BOXES]
+                     END,
+    [NON ASSORTED PIECES] = CASE
+                                WHEN Kolimi = 0 THEN
+                                    [NON ASSORTED PIECES]
+                                ELSE
+                                    0
+                            END;
+UPDATE #sncPO22
+SET Sayfa = CASE
+                WHEN Kolimi = 0 THEN
+                    1
+                ELSE
+                    2
+            END;
+
+
+
+SELECT *
+INTO #yy
+FROM #sncPO22
+WHERE 1 = 2;
+
+EXEC ('insert into #yy      
+        select  BaslikSayi,Sayfa,SayfaTip,Grup,[COLOR],[SPECIAL CODE],SellingRegion,OrginalFabrikaCikisTarih' + @str_Sum + '              
+        ,sum([PIECES PER BOX]) [PIECES PER BOX] ,sum([NO. OF BOXES]) [NO. OF BOXES],              
+        sum([NON ASSORTED PIECES]) [NON ASSORTED PIECES],sum([TOTAL PIECES]) [TOTAL PIECES],Kolimi
+		from #sncPO22                
+        group by BaslikSayi,Sayfa,SayfaTip,Grup,[COLOR],[SPECIAL CODE],OrginalFabrikaCikisTarih,SellingRegion,Kolimi');
+DROP TABLE #sncPO22;
+
+
+UPDATE #yy
+SET Sayfa = 0;
+SELECT IDENTITY(INT, 1, 1) Sira,
+       CASE
+           WHEN Kolimi = 0 THEN
+               'AÇIK ÜRÜNLER'
+           ELSE
+               'KOLILI ÜRÜNLER'
+       END GroupType,
+       *
+INTO #sncPO
+FROM #yy;
+
+
+DECLARE @Grup INT;
+DECLARE @BaslikSayi INT;
+DECLARE @Sr INT;
+SELECT @BaslikSayi = COUNT(DISTINCT Beden_Boy)
+FROM #Crossonuc;
+DECLARE cr_GrupSayi INSENSITIVE CURSOR FOR
+SELECT Grup
+FROM #sncPO
+ORDER BY Grup;
+OPEN cr_GrupSayi;
+FETCH NEXT FROM cr_GrupSayi
+INTO @Grup;
+WHILE @@fetch_status = 0
+BEGIN
+    DECLARE @count INT;
+    DECLARE @sayfa INT;
+    SET @sayfa = 1;
+    SET @count = 1;
+    DECLARE cr_SayfaSayi INSENSITIVE CURSOR FOR
+    SELECT Sira
+    FROM #sncPO
+    WHERE Grup = @Grup
+    ORDER BY Sira;
+    OPEN cr_SayfaSayi;
+    FETCH NEXT FROM cr_SayfaSayi
+    INTO @Sr;
+    WHILE @@fetch_status = 0
+    BEGIN
+        IF @BaslikSayi >= 0
+           AND @BaslikSayi < 11
+        BEGIN
+            IF @count > 26
+            BEGIN
+                SET @sayfa = @sayfa + 1;
+                SET @count = 1;
+            END;
+            UPDATE #sncPO
+            SET Sayfa = @sayfa,
+                SayfaTip = 1
+            WHERE Sira = @Sr;
+        END;
+        IF @BaslikSayi >= 11
+           AND @BaslikSayi < 26
+        BEGIN
+            IF @count > 11
+            BEGIN
+                SET @sayfa = @sayfa + 1;
+                SET @count = 1;
+            END;
+            UPDATE #sncPO
+            SET Sayfa = @sayfa,
+                SayfaTip = 2
+            WHERE Sira = @Sr;
+        END;
+        IF @BaslikSayi >= 26
+        BEGIN
+            IF @count > 6
+            BEGIN
+                SET @sayfa = @sayfa + 1;
+                SET @count = 1;
+            END;
+            UPDATE #sncPO
+            SET Sayfa = @sayfa,
+                SayfaTip = 3
+            WHERE Sira = @Sr;
+        END;
+        SET @count = @count + 1;
+        FETCH NEXT FROM cr_SayfaSayi
+        INTO @Sr;
+    END;
+    CLOSE cr_SayfaSayi;
+    DEALLOCATE cr_SayfaSayi;
+    FETCH NEXT FROM cr_GrupSayi
+    INTO @Grup;
+END;
+CLOSE cr_GrupSayi;
+DEALLOCATE cr_GrupSayi;
+
+
+
+
+EXEC ('insert into #sncPO                
+        Select ''TOPLAM'',1,1,1,Grup,[COLOR],''''' + ',SellingRegion,' + 'OrginalFabrikaCikisTarih' + @str_Sum + '              
+        ,0,0,0,sum([TOTAL PIECES]),0 from #sncPO  s              
+        group by [COLOR],Grup,OrginalFabrikaCikisTarih,SellingRegion');
+
+
+
+SET @tempsayac = 1;
+DECLARE @counter INT = 0;
+
+
+SET @tempsayac = 1;
+WHILE @tempsayac <= 54
+BEGIN
+    DECLARE @BedenSumStr VARCHAR(700);
+    SET @BedenSumStr
+        = ' select COLOR,ISNULL(Sum(case when Kolimi=0 then BedenSum' + CONVERT(VARCHAR(2), @tempsayac)
+          + ' else BedenSum' + CAST(@tempsayac AS VARCHAR(2))
+          + '* [NO. OF BOXES] end),0) BedenSum ,SellingRegion,OrginalFabrikaCikisTarih,Grup
+into #tempTotal FROM #sncPO WHERE GroupType<>''TOPLAM'' Group by COLOR,OrginalFabrikaCikisTarih,SellingRegion,Grup ';
+    SET @BedenSumStr
+        = @BedenSumStr + ' UPDATE s Set BedenSum' + CAST(@tempsayac AS VARCHAR(2))
+          + '=t.BedenSum FROM #sncPO s INNER JOIN #tempTotal t ON t.COLOR=s.COLOR and t.Grup=s.Grup and t.OrginalFabrikaCikisTarih = s.OrginalFabrikaCikisTarih and t.SellingRegion = s.SellingRegion'
+          + ' WHERE GroupType=''TOPLAM'' DROP TABLE #tempTotal';
+    PRINT @BedenSumStr;
+    EXEC (@BedenSumStr);
+    SET @tempsayac = @tempsayac + 1;
+END;
+--SELECT * FROM #sncPO
+
+DECLARE @ModelKlasor AS VARCHAR(100),
+        @PLMModelKlasor AS VARCHAR(100);
+SELECT @ModelKlasor = 'http://www.temaonline.com/ModelResim';
+SET @PLMModelKlasor = 'http://teknikfoy.lcwaikiki.local/ModelResim.aspx?path=';
+
+
+
+--booking id leri virgüllü hale getirir.
+DECLARE @orderBookingsString NVARCHAR(600);
+SET @orderBookingsString =
+(
+    SELECT
+        (
+            SELECT STUFF(list, 1, 1, '') orderBooking
+            FROM
+            (
+                SELECT DISTINCT
+                       ',' + CAST(booking.BookingRef AS VARCHAR(16)) AS [text()]
+                FROM ANKA.tb_OrderBooking booking (NOLOCK)
+                WHERE booking.OrderCode = @SiparisNo
+                GROUP BY booking.OrderCode,
+                         booking.BookingRef
+                FOR XML PATH('')
+            ) AS Sub(list)
+        )
+);
+
+
+--kuma?ç? ismini virgülle hale getirir.
+DECLARE @orderFabricMillString NVARCHAR(600);
+SET @orderFabricMillString =
+(
+    SELECT
+        (
+            SELECT STUFF(list, 1, 1, '') orderBooking
+            FROM
+            (
+                SELECT DISTINCT
+                       ' - ' + cs.Isim AS [text()]
+                FROM ANKA.tb_OrderBooking booking (NOLOCK)
+                    INNER JOIN dbo.tb_CariSourcing cs
+                        ON cs.AxCariKod = booking.FabricMillAxCariKod
+                WHERE booking.OrderCode = @SiparisNo
+                GROUP BY booking.OrderCode,
+                         cs.Isim
+                FOR XML PATH('')
+            ) AS Sub(list)
+        )
+);
+
+
+SELECT DISTINCT
+       InspectionDate,
+       SiparisKod,
+       SellingRegion
+INTO #inspectionDates
+FROM dbo.tb_AlimSiparisUlkeDetay
+WHERE tb_AlimSiparisUlkeDetay.SiparisKod = @SiparisNo;
+
+
+SELECT DISTINCT
+       ab.KumasFiyatDoviz,
+       ab.KumasFiyati,
+       ab.OrginalFabrikaCikisTarih,
+       ab.Sira SiraBaslik,
+       ab.Kumas,
+       ab.ModelAd,
+       ab.SiparisKod,
+       ab.UreticiCariKod,
+       c.Ad UreticiAd,
+       cm.Ad MumessilAd,
+       m.Tanim Marka, --'' Line,  
+       (CASE
+            WHEN c.AXSirketKodu = 'mal1' THEN
+                'LC Waikiki Morocco'
+            ELSE
+                'LC Waikiki'
+        END
+       ) AS Buyer,
+       ab.KategoriNo,
+       COALESCE(v.Tanim, 'PESIN') OdemeSekil,
+       ab.AnlasilanUretimFiyat,
+       ab.AnlasilanUretimFiyatDoviz,
+       CASE @RaporTip
+           WHEN 1 THEN
+               REPLACE(CAST(ab.MaliyetFiyat AS VARCHAR(10)), '.', ',')
+           ELSE
+               ''
+       END AS MaliyetFiyat,
+       CASE @RaporTip
+           WHEN 1 THEN
+               CAST(ab.MaliyetFiyatDoviz AS VARCHAR(10))
+           ELSE
+               ''
+       END AS MaliyetFiyatDoviz,
+       ab.Sezon,
+       ab.MerchAltGrup,
+       ab.BuyerGrupTanim,
+       COALESCE(uk.TanimIng, uk.Tanim) UrunKlasman,
+       COALESCE(vs.TanimIng, vs.Tanim) Vasita,
+       iys.Tanim YuklemeSekil,
+       lt.Tanim YuklemeCikisLimani,
+       (
+           SELECT SUM([TOTAL PIECES])FROM #sncPO WHERE [SPECIAL CODE] <> ''
+       ) ToplamSiparis,
+       CONVERT(VARCHAR(10), ab.AnlasilanYuklemeTermin, 104) AnlasilanYuklemeTermin,
+       ab.IstenenTestler,
+       ab.PaketlemeDetaylari,
+       ab.EkDetaylar,
+       ab.Sartlar,
+       ab.GecikmeSartlari,
+       ab.IstenenTestler_En,
+       ab.PaketlemeDetaylari_En,
+       ab.EkDetaylar_En,
+       ab.Sartlar_En,
+       ab.GecikmeSartlari_En,
+       ab.maxRevizyonNo,
+       ab.LastRevisionDate,
+       ab.ResimModel,
+       CONVERT(VARCHAR(10), IlkSiparisTarihi, 104) IlkSiparisTarihi,
+       ab.UreticiFirmaRef,
+       ab.KDV,
+       CASE ab.KumasciCariKod
+           WHEN 'K0' THEN
+               'B?L?NM?YOR'
+           WHEN 'K1' THEN
+               ISNULL(@orderFabricMillString, c.Ad)
+           ELSE
+               ISNULL(@orderFabricMillString, cs.Isim)
+       END Kumasci,
+       c.VergiNo,
+       c.VergiDaire,
+       'Beden1' = ISNULL(
+                  (
+                      SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 1
+                  ),
+                  ''
+                        ),
+       'Beden2' = ISNULL(
+                  (
+                      SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 2
+                  ),
+                  ''
+                        ),
+       'Beden3' = ISNULL(
+                  (
+                      SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 3
+                  ),
+                  ''
+                        ),
+       'Beden4' = ISNULL(
+                  (
+                      SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 4
+                  ),
+                  ''
+                        ),
+       'Beden5' = ISNULL(
+                  (
+                      SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 5
+                  ),
+                  ''
+                        ),
+       'Beden6' = ISNULL(
+                  (
+                      SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 6
+                  ),
+                  ''
+                        ),
+       'Beden7' = ISNULL(
+                  (
+                      SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 7
+                  ),
+                  ''
+                        ),
+       'Beden8' = ISNULL(
+                  (
+                      SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 8
+                  ),
+                  ''
+                        ),
+       'Beden9' = ISNULL(
+                  (
+                      SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 9
+                  ),
+                  ''
+                        ),
+       'Beden10' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 10
+                   ),
+                   ''
+                         ),
+       'Beden11' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 11
+                   ),
+                   ''
+                         ),
+       'Beden12' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 12
+                   ),
+                   ''
+                         ),
+       'Beden13' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 13
+                   ),
+                   ''
+                         ),
+       'Beden14' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 14
+                   ),
+                   ''
+                         ),
+       'Beden15' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 15
+                   ),
+                   ''
+                         ),
+       'Beden16' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 16
+                   ),
+                   ''
+                         ),
+       'Beden17' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 17
+                   ),
+                   ''
+                         ),
+       'Beden18' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 18
+                   ),
+                   ''
+                         ),
+       'Beden19' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 19
+                   ),
+                   ''
+                         ),
+       'Beden20' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 20
+                   ),
+                   ''
+                         ),
+       'Beden21' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 21
+                   ),
+                   ''
+                         ),
+       'Beden22' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 22
+                   ),
+                   ''
+                         ),
+       'Beden23' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 23
+                   ),
+                   ''
+                         ),
+       'Beden24' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 24
+                   ),
+                   ''
+                         ),
+       'Beden25' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 25
+                   ),
+                   ''
+                         ),
+       'Beden26' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 26
+                   ),
+                   ''
+                         ),
+       'Beden27' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 27
+                   ),
+                   ''
+                         ),
+       'Beden28' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 28
+                   ),
+                   ''
+                         ),
+       'Beden29' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 29
+                   ),
+                   ''
+                         ),
+       'Beden30' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 30
+                   ),
+                   ''
+                         ),
+       'Beden31' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 31
+                   ),
+                   ''
+                         ),
+       'Beden32' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 32
+                   ),
+                   ''
+                         ),
+       'Beden33' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 33
+                   ),
+                   ''
+                         ),
+       'Beden34' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 34
+                   ),
+                   ''
+                         ),
+       'Beden35' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 35
+                   ),
+                   ''
+                         ),
+       'Beden36' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 36
+                   ),
+                   ''
+                         ),
+       'Beden37' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 37
+                   ),
+                   ''
+                         ),
+       'Beden38' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 38
+                   ),
+                   ''
+                         ),
+       'Beden39' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 39
+                   ),
+                   ''
+                         ),
+       'Beden40' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 40
+                   ),
+                   ''
+                         ),
+       'Beden41' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 41
+                   ),
+                   ''
+                         ),
+       'Beden42' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 42
+                   ),
+                   ''
+                         ),
+       'Beden43' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 43
+                   ),
+                   ''
+                         ),
+       'Beden44' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 44
+                   ),
+                   ''
+                         ),
+       'Beden45' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 45
+                   ),
+                   ''
+                         ),
+       'Beden46' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 46
+                   ),
+                   ''
+                         ),
+       'Beden47' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 47
+                   ),
+                   ''
+                         ),
+       'Beden48' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 48
+                   ),
+                   ''
+                         ),
+       'Beden49' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 49
+                   ),
+                   ''
+                         ),
+       'Beden50' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 50
+                   ),
+                   ''
+                         ),
+       'Beden51' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 51
+                   ),
+                   ''
+                         ),
+       'Beden52' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 52
+                   ),
+                   ''
+                         ),
+       'Beden53' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 53
+                   ),
+                   ''
+                         ),
+       'Beden54' = ISNULL(
+                   (
+                       SELECT REPLACE(Beden, '_', '+')FROM #yensonuc WHERE Sira = 54
+                   ),
+                   ''
+                         ),
+       'UreticiKisaKod' = ISNULL(kk.Kod, ''),
+       CASE
+           WHEN EXISTS
+                (
+                    SELECT * FROM #ARaporSayfa WHERE VIP = 1
+                ) THEN
+               1
+           ELSE
+               0
+       END VIP,
+       ab.ExpressSiparis,
+       COALESCE(@orderBookingsString, ab.KumasciBookingId, '') KumasciBookingId,
+       ab.JIT
+-- ,(
+--SELECT CASE
+--           WHEN
+--           (
+--               SELECT COUNT(*) FROM #inspectionDates WHERE InspectionDate = ab.OrginalFabrikaCikisTarih
+--           ) = 2 THEN
+--               0
+--           ELSE
+--                (SELECT SellingRegion FROM #inspectionDates WHERE InspectionDate = ab.OrginalFabrikaCikisTarih)
+--       END
+--) AS SellingRegion
+INTO #tson
+FROM #ARaporSayfa ab
+    LEFT JOIN tb_Cari c (NOLOCK)
+        ON c.CariKod = ab.UreticiCariKod
+    LEFT JOIN tb_Cari cm (NOLOCK)
+        ON cm.CariKod = ab.MumessilCariKod
+    LEFT JOIN tb_Marka m (NOLOCK)
+        ON m.Kod = ab.Marka
+    LEFT JOIN tb_IthalatOdemeSekli ios (NOLOCK)
+        ON ios.Kod = ab.OdemeSekilKod
+    LEFT JOIN tb_UrunKlasman uk (NOLOCK)
+        ON uk.Kod = ab.UrunKlasman
+    LEFT JOIN tb_VasitaTanim vs (NOLOCK)
+        ON vs.Kod = ab.Vasitakod
+    LEFT JOIN tb_IthalatYuklemeSekli iys (NOLOCK)
+        ON iys.Kod = ab.YuklemeSekilKod
+    LEFT JOIN tb_IthalatLimanTanim lt (NOLOCK)
+        ON lt.Kod = ab.YuklemeCikisLimani
+    LEFT JOIN Tekstil..tt_UreticiKisaKod kk (NOLOCK)
+        ON kk.CariKod = ab.UreticiCariKod
+    LEFT JOIN tb_CariSourcing cs (NOLOCK)
+        ON cs.Carikod = ab.KumasciCariKod
+    LEFT JOIN dbo.tb_VadeTip v (NOLOCK)
+        ON v.Kod = ab.OdemeVade;
+
+SELECT SUM([TOTAL PIECES]) ToplamAdet,
+       Grup,
+       SellingRegion
+INTO #ToplamAdet
+FROM #sncPO
+WHERE [SPECIAL CODE] = ''
+GROUP BY Grup,
+         SellingRegion;
+
+DECLARE @ToplamFiyat FLOAT;
+
+SELECT * FROM  #ToplamAdet 
+
+SELECT @ToplamFiyat = SUM(ToplamAdet * CAST(REPLACE(MaliyetFiyat, ',', '.') AS FLOAT))
+FROM #ToplamAdet s
+    LEFT JOIN #tson t
+        ON s.Grup = t.SiraBaslik;
+
+-- SELECT * FROM #sncPO
+
+SELECT DISTINCT
+       s.SellingRegion,
+       Sira,
+       GroupType,
+       BaslikSayi,
+       Sayfa,
+       SayfaTip,
+       s.Grup,
+       COLOR,
+       '' Line,
+       [SPECIAL CODE] AS SPECIALCODE,
+       BedenSum1,
+       BedenSum2,
+       BedenSum3,
+       BedenSum4,
+       BedenSum5,
+       BedenSum6,
+       BedenSum7,
+       BedenSum8,
+       BedenSum9,
+       BedenSum10,
+       BedenSum11,
+       BedenSum12,
+       BedenSum13,
+       BedenSum14,
+       BedenSum15,
+       BedenSum16,
+       BedenSum17,
+       BedenSum18,
+       BedenSum19,
+       BedenSum20,
+       BedenSum21,
+       BedenSum22,
+       BedenSum23,
+       BedenSum24,
+       BedenSum25,
+       BedenSum26,
+       BedenSum27,
+       BedenSum28,
+       BedenSum29,
+       BedenSum30,
+       BedenSum31,
+       BedenSum32,
+       BedenSum33,
+       BedenSum34,
+       BedenSum35,
+       BedenSum36,
+       BedenSum37,
+       BedenSum38,
+       BedenSum39,
+       BedenSum40,
+       BedenSum41,
+       BedenSum42,
+       BedenSum43,
+       BedenSum44,
+       BedenSum45,
+       BedenSum46,
+       BedenSum47,
+       BedenSum48,
+       BedenSum49,
+       BedenSum50,
+       BedenSum51,
+       BedenSum52,
+       BedenSum53,
+       BedenSum54,
+       [PIECES PER BOX] AS PIECESPERBOX,
+       [NO. OF BOXES] AS NOOFBOXES,
+       [NON ASSORTED PIECES] AS NONASSORTEDPIECES,
+       [TOTAL PIECES] AS TOTALPIECES,
+       t.*,
+       ResimYeri = ISNULL(
+                             'file:' + Numune.dbo.fnk_GetUrunResim(@OzelKod1),
+                   (
+                       SELECT TOP 1
+                              REPLACE(
+                                         REPLACE(
+                                                    CASE
+                                                        WHEN tf.PlmCode IS NULL THEN
+                                                            @ModelKlasor
+                                                            + REPLACE(
+                                                                         CASE
+                                                                             WHEN LEN(ISNULL(Resim_YeriSB, '')) > 3 THEN
+                                                                                 Resim_YeriSB
+                                                                             ELSE
+                                                                                 CASE
+                                                                                     WHEN LEN(ISNULL(Resim_Yeri_Eng, '')) > 3 THEN
+                                                                                         Resim_Yeri_Eng
+                                                                                     ELSE
+                                                                                         Resim_Yeri
+                                                                                 END
+                                                                         END,
+                                                                         '\',
+                                                                         '/'
+                                                                     )
+                                                        ELSE
+                                                            @PLMModelKlasor
+                                                            + REPLACE(
+                                                                         REPLACE(
+                                                                                    CASE
+                                                                                        WHEN LEN(ISNULL(Resim_YeriSB, '')) > 3 THEN
+                                                                                            Resim_YeriSB
+                                                                                        ELSE
+                                                                                            CASE
+                                                                                                WHEN LEN(ISNULL(
+                                                                                                                   Resim_Yeri_Eng,
+                                                                                                                   ''
+                                                                                                               )
+                                                                                                        ) > 3 THEN
+                                                                                                    Resim_Yeri_Eng
+                                                                                                ELSE
+                                                                                                    Resim_Yeri
+                                                                                            END
+                                                                                    END,
+                                                                                    '\\promasterv.lcwaikiki.local\flexvault\images\',
+                                                                                    ''
+                                                                                ),
+                                                                         '\',
+                                                                         '/'
+                                                                     )
+                                                    END,
+                                                    'J:',
+                                                    ''
+                                                ),
+                                         'j:',
+                                         ''
+                                     )
+                       FROM tb_UrunGrup ug (NOLOCK)
+                           INNER JOIN tb_Urun_NumuneBaglanti unb (NOLOCK)
+                               ON LEFT(unb.OzelKod1, 6) = LEFT(ug.OzelKod1, 6)
+                                  AND RIGHT(unb.OzelKod1, 1) = RIGHT(ug.OzelKod1, 1)
+                           INNER JOIN Numune..TeknikFoy_Tbl tf (NOLOCK)
+                               ON tf.Model_Kodu = unb.Numune_Kodu
+                       WHERE ug.ModelGrupRef = @ModelGrupRef
+                   )
+                         ),
+       'ToplamFiyat' = @ToplamFiyat,
+       ta.ToplamAdet
+FROM #sncPO s
+    LEFT JOIN #tson t
+        ON s.Grup = t.SiraBaslik --AND s.SellingRegion = t.SellingRegion
+    LEFT JOIN #ToplamAdet ta
+        ON ta.Grup = s.Grup
+           AND s.SellingRegion = ta.SellingRegion
+ORDER BY s.Sira;
+
+-- SELECT * FROM #sncPO
+
+
+
+--select  distinct Grup,Sayfa  from #sncPO s order by Grup,Sayfa              
+--drop table #AlmSipRaporBaslik;
+--drop table #ARaporSayfa;
+--drop table #Crossonuc;
+--drop table #yensonuc;
+----exec ('drop table #tablo' + @@spid);
+--drop table #tablo;
+--drop table #sncPO;
+--drop table #yy;
+--drop table #tson;
+--drop table #ToplamAdet;
+--drop table #AlimSiparisDetay;
+--drop table #AlimSiparisIthalat;
+--DROP TABLE #inspectionDates
+
+
+---------------------------------------------------------------------------------------------------
+
+DECLARE @SiparisNo INT;
+SET @SiparisNo = 793575; --129589              
+DECLARE @RaporTip INT; -- 1- Bizde 2 - Üreticide              
+SET @RaporTip = 1;
+
+DECLARE @ModelGrupRef INT;
+
+SELECT @ModelGrupRef = ModelGrupRef --613959
+FROM dbo.tb_AlimSiparisBaslik (NOLOCK)
+WHERE SiparisKod = 793575;
+
+   IF(@Parity IS NULL)     
+   BEGIN
+   declare @EstimatedCostDetailId int;
+   SET  @EstimatedCostDetailId = (SELECT TOP 1 asmi.EstimatedCostDetailId from anka.tb_AlimSiparisOnMaliyetIliski asmi(NOLOCK) where asmi.SiparisKod=@SiparisNo AND asmi.IsActive=1)
+
+      SET @Parity = (SELECT TOP 1 Satis
+    FROM ANKA.tb_EstimatedCostContentDetail ecs (NOLOCK)
+        INNER JOIN Retail..tb_Ulke (NOLOCK) u
+            ON ecs.ProductOriginId = u.UlkeRef
+        INNER JOIN dbo.tb_Cari c (NOLOCK)
+            ON c.ISO_Kod = u.ISO_Kod
+        INNER JOIN dbo.tb_Doviz d (NOLOCK)
+            ON d.DovizRef = ecs.CurrencyId 
+        INNER JOIN dbo.tb_Ulke u2 (NOLOCK)  
+		    ON u2.UlkeRef = u.UlkeRef
+		LEFT JOIN tb_doviz d2 (NOLOCK) 
+		    ON u2.VarsayilanDovizRef = d2.DovizRef
+		INNER JOIN tb_DovizKur dk (NOLOCK) 
+			ON d2.Kod = dk.DovizCinsi and   dk.Tarih =  CONVERT(DATE, @Tarih)
+    WHERE ecs.EstimatedCostDetailId = @EstimatedCostDetailId AND c.AXSirketKodu IN ( 'egl1', 'mal1','RUL1','KZL1','idl1' ))
+	END
+	ELSE 
+	BEGIN 
+	SET @Parity = (SELECT TOP 1 Parity from dbo.tb_AlimSiparisBaslik (NOLOCK) where SiparisKod = @SiparisNo) 
+	END
+
+   create table #AlimSiparisDetay (UrunGrupRef int
+                                   ,ModelKod varchar(8)
+                                   ,AmbalajAdet int
+                                   ,Marka varchar(4)
+                                   ,Sezon varchar(3)
+                                   ,MerchAltGrup varchar(5)
+								   ,BuyerGrupTanim varchar(255)
+                                   ,UrunKlasman int
+                                   ,KDVAlis varchar(3)
+                                   ,SiparisKod int
+                                   ,Fiyat float
+                                   ,UreticiFiyat float
+                                   ,LandedFiyat float
+                                   ,Doviz varchar(10)
+                                   ,YurtIciUreticiDepoTarihi datetime
+                                   --UrunID decimal null, 
+                                   ,RevizeGelecekTarih varchar(50)
+                                   ,GelecekTarih varchar(50)
+                                   ,KumasciCarikod varchar(50)
+                                   ,VIP bit
+                                   ,OrginalFabrikaCikisTarih datetime
+								   ,EnGecYuklemeTarihi datetime
+                                   ,KumasFiyatDoviz int
+                                   ,KumasFiyati float
+                                   ,Miktar int
+                                   ,Iptal int
+                                   ,RenkRef int
+                                   ,UrunOptionRef int
+                                   ,UrunOptionAsortiRef int
+                                   ,UrunOptionSizeRef int
+                                   ,Ozelkod2 char(16)
+								   ,ProformaInvoiceNo VARCHAR(100)
+								   ,SellingRegion INT,
+								   VehicleId INT);
+   create table #AlimSiparisIthalat ([SiparisKod] int
+                                     ,UreticiCarikod varchar(16)
+                                     ,UreticiFirmaRef int
+                                     ,KategoriNo int
+                                     ,AnlasilanYuklemeTermin datetime
+                                     ,[MumessilCarikod] varchar(16)
+                                     ,[OdemeVade] varchar(3)
+                                     ,[AnlasilanUretimFiyat] [float]
+                                     ,[Vasitakod] [int]
+                                     ,[YuklemeCikisLimani] [int]
+                                     ,[AraciFirmaCariKod] varchar(16)
+                                     ,[Mense] varchar(5)
+                                     ,[KumasMense] varchar(5)
+                                     ,[IthalatRejimKod] [int]
+                                     ,[AkreditifNo] [int]
+                                     ,[IhracatciCariKod] [char](16)
+                                     ,[OdemeSekilkod] [int]
+                                     ,[YuklemeSekilKod] [int]
+                                     ,[AnlasilanUretimFiyatDoviz] varchar(5)
+                                     ,[UrunOptionRef] [int]
+                                     ,[UrunOptionAsortiRef] [int]
+                                     ,[UrunOptionSizeRef] [int]);
+
+
+
+
+
+	SELECT DISTINCT calcRoute.DestinationCountryRef, maliyetIliski.ColorRef,uo.UrunOptionRef,calcRoute.EstimatedCostDetailId, calcRoute.RouteId
+	INTO #RouteCountry
+	FROM ANKA.tb_AlimSiparisOnMaliyetIliski maliyetIliski
+	INNER JOIN (
+	SELECT DestinationCountryRef ,EstimatedCostDetailId, 1 RouteId FROM ANKA.tb_EstimatedCostCalculated 
+	WHERE LandedApprovalDate IS NOT NULL
+	UNION
+	SELECT DestinationCountryRef ,EstimatedCostDetailId, 2 RouteId FROM ANKA.tb_EstimatedCostCalculated WHERE LandedApprovalDateEurope IS NOT NULL
+	UNION
+	SELECT DestinationCountryRef ,EstimatedCostDetailId, 3 RouteId FROM ANKA.tb_EstimatedCostCalculated WHERE LandedApprovalDateDirectShipment IS NOT NULL
+	) calcRoute ON calcRoute.EstimatedCostDetailId = maliyetIliski.EstimatedCostDetailId
+
+	INNER JOIN ANKA.tb_EstimatedCostDetail cd (nolock) ON cd.Id = maliyetIliski.EstimatedCostDetailId
+	INNER JOIN ANKA.tb_EstimatedCostHeader ch (nolock) ON ch.Id = cd.EstimatedCostHeaderId
+	INNER JOIN	dbo.tb_UrunOption uo (nolock) ON uo.ModelRef =ch.ProductGroupId AND uo.RenkRef = maliyetIliski.ColorRef	
+	WHERE SiparisKod = @SiparisNo AND IsActive = 1
+
+	SELECT DISTINCT logi.VehicleId,	rc.DestinationCountryRef, rc.ColorRef,rc.UrunOptionRef 
+	, 1 RouteId
+	INTO #RouteCountry2
+	FROM #RouteCountry rc	
+	INNER JOIN ANKA.tb_EstimatedCostLogistic logi (nolock) ON logi.EstimatedCostDetailId = rc.EstimatedCostDetailId AND logi.RouteId = rc.RouteId
+
+
+   INSERT INTO #AlimSiparisDetay
+SELECT ug.ID UrunGrupRef,
+       ug.OzelKod1 ModelKod,
+       ug.AmbalajAdet,
+       ug.Marka,
+       ug.Sezon,
+       ug.MerchAltGrup,
+       bg.TanimEng,
+       ug.UrunKlasman,
+       ug.KdvAlis,
+       d.SiparisKod,
+       Fiyat,
+       d.UreticiFiyat,
+       d.LandedFiyat,
+       Doviz,
+       YurtIciUreticiDepoTarihi,
+       RevizeGelecekTarih,
+       GelecekTarih,
+       KumasciCarikod,
+       d.VIP,
+       ulke.InspectionDate,
+       od.LatestShipmentDate,
+       KumasFiyatDoviz,
+       KumasFiyati,
+	   CASE
+           WHEN os.AlimsiparisStatuId IN ( 7, 10, 11 ) THEN
+               0
+           ELSE
+               ulke.Miktar
+       END Miktar,
+       CASE
+           WHEN os.AlimsiparisStatuId IN ( 7, 10, 11 ) THEN
+               0
+           ELSE
+               ulke.Iptal
+       END Iptal,
+       r.RenkRef,
+       u.UrunOptionRef,
+       u.UrunOptionAsortiRef,
+       u.UrunOptionSizeRef,
+       ug.OzelKod2,
+	   b.ProformaInvoiceNo,
+	   ulke.SellingRegion,
+	   ulke.VehicleId
+FROM dbo.tb_AlimSiparisDetay d (NOLOCK)
+    INNER JOIN dbo.tb_AlimSiparisBaslik b (NOLOCK)
+        ON b.SiparisKod = d.SiparisKod
+    INNER JOIN dbo.tb_ModelGrup mg (NOLOCK)
+        ON mg.Sira = b.ModelGrupRef
+    INNER JOIN dbo.tb_Urun u (NOLOCK)
+        ON d.UrunID = u.UrunID
+	INNER JOIN
+    (
+       SELECT asud.UrunOptionRef,
+               UrunOptionSizeRef,
+               UrunOptionAsortiRef,
+               SUM(Miktar) AS Miktar,
+               SUM(Iptal) AS Iptal,
+               InspectionDate,
+			   UrunId,
+			   asud.SellingRegion,
+			   rc.VehicleId
+        FROM dbo.tb_AlimSiparisUlkeDetay asud(NOLOCK)
+		INNER JOIN #RouteCountry2 rc (nolock) ON rc.DestinationCountryRef = UlkeRef AND rc.UrunOptionRef = asud.UrunOptionRef
+        WHERE SiparisKod = @SiparisNo
+        GROUP BY InspectionDate,
+                 asud.UrunOptionRef,
+                 UrunOptionSizeRef,
+                 UrunOptionAsortiRef,UrunId,asud.SellingRegion,rc.VehicleId
+    ) AS ulke
+        ON ulke.UrunOptionRef = u.UrunOptionRef AND ulke.UrunId = u.UrunID
+    LEFT JOIN dbo.tb_AlimSiparisOptionStatu os
+        ON os.SiparisKod = b.SiparisKod
+           AND os.UrunOptionRef = u.UrunOptionRef
+    LEFT JOIN dbo.tb_OrderDetailDates od (NOLOCK)
+        ON b.SiparisKod = od.OrderCode
+           AND od.UrunOptionRef = os.UrunOptionRef
+    INNER JOIN dbo.tb_UrunGrup ug (NOLOCK)
+        ON ug.UrunKod = u.UrunKod
+    INNER JOIN dbo.tb_Renk r (NOLOCK)
+        ON r.Kod = ISNULL(ug.NumuneRenk, u.Renk)
+    INNER JOIN Planlama..vw_BuyerGrup bg (NOLOCK)
+        ON bg.UrunKlasman = ug.UrunKlasman
+           AND bg.MerchGrup = ug.MerchGrup
+WHERE d.SiparisKod = @SiparisNo
+      AND ISNULL(d.PlansizEklenen, 0) = 0; --and Miktar - Iptal > 0;
+
+IF NOT EXISTS (SELECT * FROM #AlimSiparisDetay)
+BEGIN
+    INSERT INTO #AlimSiparisDetay
+    SELECT DISTINCT
+           uo.ModelRef UrunGrupRef,
+           mg.Sezon + mg.ModelGrup ModelKod,
+           ISNULL(
+           (
+               SELECT SUM(Miktar)
+               FROM dbo.tb_UrunOptionAsortiRecete (NOLOCK)
+               WHERE UrunOptionAsortiRef = d.UrunOptionAsortiRef
+           ),
+           1
+                 ) AmbalajAdet,
+           ug.Marka,
+           ug.Sezon,
+           ug.MerchAltGrup,
+           bg.TanimEng,
+           ug.UrunKlasman,
+           ug.KdvAlis,
+           d.SiparisKod,
+           Fiyat,
+           UreticiFiyat,
+		   d.LandedFiyat,
+           Doviz,
+           CONVERT(DATETIME, d.YurtIciUreticiDepoTarihi, 104),
+           RevizeGelecekTarih,
+           GelecekTarih,
+           KumasciKod,
+           0,
+           CONVERT(DATETIME, d.YurtIciUreticiDepoTarihi, 104),
+		   od.LatestShipmentDate,
+           d.KumasFiyatDovizTipi,
+           KumasFiyati,
+           Miktar,
+           CASE
+               WHEN uoa.AsortiTipRef = 11
+                    AND d.Miktar = 1 THEN
+                   d.Miktar
+               ELSE
+                   d.Iptal
+           END Iptal,
+           uo.RenkRef,
+           d.UrunOptionRef,
+           d.UrunOptionAsortiRef,
+           UrunOptionSizeRef,
+           ug.OzelKod2,
+		  b.ProformaInvoiceNo,
+		  0,
+		  1
+    FROM dbo.tb_AlimSiparisDetaySablon d
+        INNER JOIN dbo.tb_AlimSiparisBaslik b (NOLOCK)
+            ON b.SiparisKod = d.SiparisKod
+		LEFT JOIN dbo.tb_OrderDetailDates od (NOLOCK)
+			ON b.SiparisKod = od.OrderCode
+			 AND od.UrunOptionRef = d.UrunOptionRef
+        INNER JOIN dbo.tb_ModelGrup mg (NOLOCK)
+            ON mg.Sira = b.ModelGrupRef
+        INNER JOIN dbo.tb_UrunOption uo (NOLOCK)
+            ON uo.UrunOptionRef = d.UrunOptionRef
+        LEFT JOIN dbo.tb_UrunOptionAsorti uoa (NOLOCK)
+            ON uoa.UrunOptionAsortiRef = d.UrunOptionAsortiRef
+        INNER JOIN dbo.tb_UrunGrup ug (NOLOCK)
+            ON ug.ID = uo.ModelRef
+        INNER JOIN Planlama..vw_BuyerGrup bg (NOLOCK)
+            ON bg.UrunKlasman = ug.UrunKlasman
+               AND bg.MerchGrup = ug.MerchGrup
+    WHERE d.SiparisKod = @SiparisNo;
+
+
+END;
+
+
+
+   delete from #AlimSiparisDetay where Miktar - Iptal <= 0;
+
+
+   insert into #AlimSiparisIthalat
+   select     asi.SiparisKod, asi.UreticiCarikod, asi.UreticiFirmaRef, asi.KategoriNo, asi.AnlasilanYuklemeTermin, asi.MumessilCarikod, asi.OdemeVade
+              ,AnlasilanUretimFiyat, Vasitakod, YuklemeCikisLimani, AraciFirmaCariKod, Mense, KumasMense, IthalatRejimKod, AkreditifNo, IhracatciCariKod
+              ,OdemeSekilkod, YuklemeSekilKod, AnlasilanUretimFiyatDoviz, UrunOptionRef, UrunOptionAsortiRef, UrunOptionSizeRef
+   from       dbo.tb_AlimSiparisIthalat asi (nolock)
+   inner join tb_Urun u (nolock) on u.UrunID = asi.UrunID
+   where      SiparisKod = @SiparisNo;
+
+   if not exists (select 0 from #AlimSiparisIthalat)
+   begin
+      insert into #AlimSiparisIthalat
+      select     asi.SiparisKod, null, null, null, d.YurtIciUreticiDepoTarihi, asi.MumessilCarikod, asi.OdemeVade, AnlasilanUretimFiyat, Vasitakod
+                 ,YuklemeCikisLimani, AraciFirmaCariKod, Mense, KumasMense, IthalatRejimKod, AkreditifNo, IhracatciCariKod, OdemeSekilkod, YuklemeSekilKod
+                 ,AnlasilanUretimFiyatDoviz, asi.UrunOptionRef, asi.UrunOptionAsortiRef, asi.UrunOptionSizeRef
+      from       dbo.tb_AlimSiparisIthalatSablon asi (nolock)
+      inner join #AlimSiparisDetay d (nolock) on asi.SiparisKod = d.SiparisKod
+                                                 and (asi.UrunOptionAsortiRef = d.UrunOptionAsortiRef or asi.UrunOptionSizeRef = d.UrunOptionSizeRef)
+      where      asi.SiparisKod = @SiparisNo;
+   end;
+   declare @ModelId int;
+   select top 1 @ModelId = nb.NumuneID
+   from   dbo.tb_Urun_NumuneBaglanti nb (nolock)
+   where  nb.ModelGrupRef = @ModelGrupRef;
+
+   declare @KumasTicariAd nvarchar(255);
+   select top 1 @KumasTicariAd = case when isnull(KumasTicariAdEn, '') = '' then ''
+                                      else isnull(rtrim(KumasTicariAdEn), '') + ' - '
+                                 end
+   from   Numune.dbo.TeknikFoyAnaKumas_Tbl (nolock)
+   where  AnaKumas = 1 and ModelID = @ModelId;
+
+   declare @Kumas_Kodu varchar(20);
+   select top 1 @Kumas_Kodu = Kumas_Kodu
+   from   Numune.dbo.TeknikFoyAnaKumas_Tbl (nolock)
+   where  AnaKumas = 1 and ModelID = @ModelId;
+
+   declare @Kumasad varchar(1000);
+   select top 1 @Kumasad = Ad
+   from   tb_UrunGrupKumas (nolock)
+   where  Kumaskod = @Kumas_Kodu;
+
+   
+   declare @RevizyonNo int;
+   select @RevizyonNo = max(RevizyonNo)
+   from   tb_AlimsiparisIthalatRevizyonBaslik rv (nolock)
+   where  rv.Sipariskod = @SiparisNo;
+
+   declare @KumasciBooking varchar(255) = '';
+   set @KumasciBooking = isnull((select distinct cast(BookingID as varchar(10)) + ','
+                                 from   dbo.tb_KumasciSiparisBooking ksb (nolock)
+                                 where  ksb.SiparisKod = @SiparisNo
+                                for xml path(''))
+                                ,'');
+
+   declare @ModelAd varchar(50);
+   declare @OzelKod1 varchar(8);
+   select top 1 @ModelAd = Ad, @OzelKod1 = ugk.OzelKod1
+   from   tb_UrunGrup ugk (nolock)
+   where  ugk.UrunKartTipRef = 14 and ugk.ModelGrupRef = @ModelGrupRef;
+
+   DECLARE @LastRevisionDate DATETIME =
+        (
+            SELECT TOP 1
+                   header.CreatedDate
+            FROM ANKA.tb_OrderChangeRequestDetail (NOLOCK) detail
+                INNER JOIN ANKA.tb_OrderChangeRequestHeader header
+                    ON header.Id = detail.OrderChangeRequestHeaderId
+            WHERE detail.OrderCode = @SiparisNo
+        );
+
+
+   select     distinct isnull(isnull(@KumasTicariAd, '') + @Kumasad, '') Kumas, @ModelAd ModelAd, asd.SiparisKod --, u.UrunID
+                       ,isnull(asb.CariKod, '') UreticiCariKod, isnull(asi.MumessilCarikod, '') MumessilCariKod, asd.Marka, '' KategoriNo
+                       ,(
+					  CASE 
+					  WHEN c.AXSirketKodu ='mal1' THEN 10  
+					  WHEN c.AXSirketKodu ='KZL1' THEN 10
+					  WHEN c.AXSirketKodu ='RUL1' THEN 10
+					  WHEN c.AXSirketKodu ='idl1' THEN 10 
+					  ELSE  COALESCE(asi.OdemeSekilkod, 1, '') END)AS OdemeSekilKod,
+					   --COALESCE(asi.OdemeSekilkod, 1, '') OdemeSekilKod,
+					   ROUND(case when asd.Ozelkod2 = 'DDP.TR.TSL' then asd.UreticiFiyat
+                                                                                     else isnull(asd.UreticiFiyat, '')
+                                                                                end
+                                                                                ,2) AnlasilanUretimFiyat
+                       ,case when asd.Ozelkod2 = 'DDP.TR.TSL' then case when isnull(asd.Doviz, '') = '' then 'TL'
+                                                                        else isnull(asd.Doviz, '')
+                                                                   end
+                             else isnull(asd.Doviz, '')
+                        end AnlasilanUretimFiyatDoviz, asd.LandedFiyat MaliyetFiyat, case when isnull(asd.Doviz, '') = '' then 'TL'
+                                                                                          else isnull(asd.Doviz, '')
+                                                                                     end MaliyetFiyatDoviz, asd.Sezon, asd.MerchAltGrup,asd.BuyerGrupTanim, asd.UrunKlasman
+                       ,coalesce(asi.Vasitakod, l.VehicleId, '') Vasitakod, coalesce(asi.YuklemeSekilKod, '') YuklemeSekilKod
+                       ,coalesce(asi.YuklemeCikisLimani, l.ShipmentPortId, '') YuklemeCikisLimani, 0 ToplamSiparis
+                       ,isnull(asd.YurtIciUreticiDepoTarihi, '') AnlasilanYuklemeTermin, coalesce(st.IstenenTestler, '') IstenenTestler
+                       ,coalesce(st.PaketlemeDetaylari, '') PaketlemeDetaylari, case @KumasciBooking when '' then '' else coalesce(st.EkDetaylar, '')end EkDetaylar
+                       ,coalesce(st.Sartlar, '') Sartlar, coalesce(st.GecikmeSartlari, '') GecikmeSartlari, coalesce(st.IstenenTestler_En, '') IstenenTestler_En
+                       ,coalesce(st.PaketlemeDetaylari_En, '') PaketlemeDetaylari_En, case @KumasciBooking
+                                                                                           when '' then ''
+                                                                                           else coalesce(st.EkDetaylar_En, '')
+                                                                                      end EkDetaylar_En, coalesce(st.Sartlar_En, '') Sartlar_En
+                       ,coalesce(st.GecikmeSartlari_En, '') GecikmeSartlari_En, 0 Grup                           --coalesce(r.Revizyon3,'') Revizyon3,               
+                       ,'maxRevizyonNo' = isnull(@RevizyonNo, 0), @LastRevisionDate AS LastRevisionDate, asb.Tarih IlkSiparisTarihi
+                       ,coalesce(asd.RevizeGelecekTarih, asd.GelecekTarih, '') DepoTeslimTarihi, left(asd.ModelKod, 6) ResimModel
+                       ,isnull(asi.UreticiFirmaRef, '') UreticiFirmaRef, KDV.Deger KDV, isnull(asd.KumasciCarikod, '') as KumasciCariKod, asd.VIP
+                       --,asd.KumasFiyati          
+                       ,(select (select    cast(row_number() over (order by asd.ModelKod) as varchar) + ' - ' + cast(isnull(A.KumasFiyati, 0) as varchar) + ' '
+                                           + isnull(D.Kod, '') + '; '
+                                 from      #AlimSiparisDetay A (nolock)
+                                 left join dbo.tb_Doviz D (nolock) on D.DovizRef = A.KumasFiyatDoviz
+                                 where     A.UrunOptionAsortiRef is not null
+                                 order by  asd.ModelKod
+                                for xml path(''))) KumasFiyati, '' KumasFiyatDoviz, asd.OrginalFabrikaCikisTarih,asd.SellingRegion,asd.EnGecYuklemeTarihi --,asd.ExpressSiparis    
+                       ,dbo.fnk_FastTrackSiparismi(asd.SiparisKod) ExpressSiparis, asi.OdemeVade, @KumasciBooking KumasciBookingId, asd.UrunOptionRef
+                       ,asd.UrunOptionAsortiRef, asd.UrunOptionSizeRef, ISNULL(etiket.Jit,0) JIT,ISNULL(@Parity,0) Parity,
+					   asb.ProformaInvoiceNo, asd.VehicleId
+   into       #AlmSipRaporBaslik
+   from       #AlimSiparisDetay asd (nolock)
+   inner join tb_AlimSiparisBaslik asb (nolock) on asb.SiparisKod = asd.SiparisKod
+   left join  ANKA.tb_AlimSiparisOnMaliyetIliski i (nolock) on i.SiparisKod = asd.SiparisKod and i.ColorRef = asd.RenkRef and i.IsActive = 1
+   left join  (SELECT logistics.VehicleId,logistics.EstimatedCostDetailId,MIN(logistics.ShipmentPortId)ShipmentPortId FROM ANKA.tb_EstimatedCostLogistic logistics GROUP BY logistics.VehicleId, logistics.EstimatedCostDetailId) l ON l.EstimatedCostDetailId = i.EstimatedCostDetailId AND l.VehicleId = asd.VehicleId
+   left join  tb_UrunKlasman uk (nolock) on uk.Kod = asd.UrunKlasman and TedarikGrupKod = 8
+   left join  #AlimSiparisIthalat asi (nolock) on asi.SiparisKod = asd.SiparisKod
+                                                  and (asi.UrunOptionSizeRef = asd.UrunOptionSizeRef or asi.UrunOptionAsortiRef = asd.UrunOptionAsortiRef) --and asi.UrunID = asd.UrunID
+   left join  tb_AlimSiparisIstenenAciklamalarSabitTanimlar st (nolock) on st.Kod = coalesce(
+                                                                                       (case when uk.TedarikGrupKod = 8 and uk.AnaGrupKod = 2 then 2
+                                                                                             else
+                                                                                                case when uk.TedarikGrupKod = 8 and uk.AnaGrupKod = 1 then 3 else
+                                                                                                                                                            1 end
+                                                                                        end)
+                                                                                       ,1)
+   left join  tb_UrunFiyat uf (nolock) on uf.UrunGrupRef = asd.UrunGrupRef and uf.FiyatKod = 'I1'
+   left join  dbo.tb_Kdv KDV (nolock) on KDV.Kod = asd.KDVAlis
+   LEFT JOIN ANKA.tb_AlimSiparisEtiket etiket (NOLOCK) ON etiket.OrderCode = asb.SiparisKod AND etiket.UrunOptionRef = asd.UrunOptionRef
+   left join tb_Cari c (nolock) on c.CariKod = asb.CariKod;
+
+
+   update #AlmSipRaporBaslik
+   set    KumasciBookingId = left(KumasciBookingId, len(KumasciBookingId) - 1)
+   where  len(KumasciBookingId) > 0;
+
+   select distinct rb.SiparisKod, rb.Kumas, rb.ModelAd, rb.UreticiCariKod, rb.MumessilCariKod, rb.Marka, rb.KategoriNo, rb.OdemeSekilKod
+                   ,rb.AnlasilanUretimFiyat, rb.AnlasilanUretimFiyatDoviz, rb.MaliyetFiyat, rb.MaliyetFiyatDoviz, rb.Sezon, rb.MerchAltGrup, rb.BuyerGrupTanim, rb.UrunKlasman
+                   ,rb.Vasitakod, rb.YuklemeSekilKod, rb.YuklemeCikisLimani, rb.ToplamSiparis, rb.AnlasilanYuklemeTermin, rb.IstenenTestler
+                   ,rb.PaketlemeDetaylari, rb.EkDetaylar, rb.Sartlar, rb.GecikmeSartlari, rb.IstenenTestler_En, rb.PaketlemeDetaylari_En, rb.EkDetaylar_En
+                   ,rb.Sartlar_En, rb.GecikmeSartlari_En                 --Revizyon3,              
+                                                                         --Revizyon2,              
+                                                                         --Revizyon1 ,               
+                   ,maxRevizyonNo                                        --DepoTeslimTarihi,              
+                   ,ResimModel                                           --    MaxRevizyonTarih ,               
+                   ,IlkSiparisTarihi, UreticiFirmaRef, KDV, KumasciCariKod, VIP, rb.KumasFiyati, rb.KumasFiyatDoviz, rb.OrginalFabrikaCikisTarih,rb.SellingRegion,rb.EnGecYuklemeTarihi,rb.LastRevisionDate
+                   ,rb.ExpressSiparis, rb.OdemeVade, rb.KumasciBookingId,rb.JIT,rb.Parity,rb.ProformaInvoiceNo, rb.VehicleId --, UrunOptionRef, UrunOptionAsortiRef, UrunOptionSizeRef
+   into   #Axx
+   from   #AlmSipRaporBaslik rb;
+   select identity(int, 1, 1) Sira, * into #ARaporSayfa from #Axx;
+   drop table #Axx;
+
+   update rb
+   set    Grup = x.Sira
+   from   #AlmSipRaporBaslik rb, #ARaporSayfa x
+   where  rb.SiparisKod = x.SiparisKod and rb.Kumas = x.Kumas and rb.ModelAd = x.ModelAd and rb.UreticiCariKod = x.UreticiCariKod
+          and rb.MumessilCariKod = x.MumessilCariKod and rb.Marka = x.Marka and rb.KategoriNo = x.KategoriNo
+          and rb.OdemeSekilKod = x.OdemeSekilKod and rb.AnlasilanUretimFiyat = x.AnlasilanUretimFiyat
+          and rb.AnlasilanUretimFiyatDoviz = x.AnlasilanUretimFiyatDoviz and rb.MaliyetFiyat = x.MaliyetFiyat and rb.MaliyetFiyatDoviz = x.MaliyetFiyatDoviz
+          and rb.Sezon = x.Sezon and rb.MerchAltGrup = x.MerchAltGrup and rb.BuyerGrupTanim = x.BuyerGrupTanim and rb.UrunKlasman = x.UrunKlasman and rb.Vasitakod = x.Vasitakod
+          and rb.YuklemeSekilKod = x.YuklemeSekilKod and rb.YuklemeCikisLimani = x.YuklemeCikisLimani and rb.ToplamSiparis = x.ToplamSiparis
+          and rb.AnlasilanYuklemeTermin = x.AnlasilanYuklemeTermin and rb.IstenenTestler = x.IstenenTestler and rb.PaketlemeDetaylari = x.PaketlemeDetaylari
+          and rb.EkDetaylar = x.EkDetaylar and rb.Sartlar = x.Sartlar and rb.GecikmeSartlari = x.GecikmeSartlari and rb.IstenenTestler_En = x.IstenenTestler_En
+          and rb.PaketlemeDetaylari_En = x.PaketlemeDetaylari_En and rb.EkDetaylar_En = x.EkDetaylar_En and rb.Sartlar_En = x.Sartlar_En
+          and rb.GecikmeSartlari_En = x.GecikmeSartlari_En and rb.maxRevizyonNo = x.maxRevizyonNo and rb.ResimModel = x.ResimModel
+          and rb.UreticiFirmaRef = x.UreticiFirmaRef and rb.KDV = x.KDV and rb.KumasciCariKod = x.KumasciCariKod
+          and rb.OrginalFabrikaCikisTarih = x.OrginalFabrikaCikisTarih
+		  AND rb.SellingRegion = x.SellingRegion
+		  AND rb.VehicleId = x.VehicleId
+		  AND ISNULL(rb.EnGecYuklemeTarihi,'1/1/1970') = ISNULL(x.EnGecYuklemeTarihi,'1/1/1970')
+		  AND rb.JIT = x.JIT AND rb.Parity = x.Parity AND ISNULL(rb.ProformaInvoiceNo,'') = ISNULL(x.ProformaInvoiceNo,'');
+   --and rb.UrunOptionRef = x.UrunOptionRef and isnull(rb.UrunOptionAsortiRef,0) = isnull(x.UrunOptionAsortiRef,0)
+   --   and isnull(rb.UrunOptionSizeRef,0) = isnull(x.UrunOptionSizeRef,0);
+   --SELECT Grup,* FROM #AlmSipRaporBaslik
+   --SELECT * FROM #ARaporSayfa
+
+
+
+
+
+   select     distinct asd.SiparisKod, asd.ModelKod OzelKod1, rtrim(r.Tanim) + '-' + r.Kod Renk, asd.AmbalajAdet,
+       ((asd.Miktar - asd.Iptal)/asd.AmbalajAdet) NetSiparis,
+       (asd.Miktar - asd.Iptal) ToplamAdet, uoar.Miktar, rtrim(replace(st.SizeKisaKod, '+', '_')) Beden
+                       ,rtrim(replace(st.SizeKisaKod, '+', '_')) + case when rtrim(coalesce(uos.Boy, '')) = '' then ''
+                                                                        else '-' + rtrim(coalesce(uos.Boy, ''))
+                                                                   end Beden_Boy, asb.Grup, st.Id SizeRef, case when rtrim(coalesce(uos.Boy, '')) = '' then ''
+                                                                                                                else rtrim(coalesce(uos.Boy, ''))
+                                                                                                           end Boy, asd.UrunOptionRef, asd.UrunOptionAsortiRef
+                       ,asd.UrunOptionSizeRef,asd.OrginalFabrikaCikisTarih,asd.SellingRegion, asd.VehicleId
+   into #Crossonuc11
+   from       #AlimSiparisDetay asd (nolock)
+   inner join #AlmSipRaporBaslik asb (nolock) on asb.UrunOptionAsortiRef = asd.UrunOptionAsortiRef AND asb.OrginalFabrikaCikisTarih = asd.OrginalFabrikaCikisTarih
+   AND asb.SellingRegion = asd.SellingRegion AND asb.VehicleId = asd.VehicleId
+   inner join dbo.tb_UrunOption uo (nolock) on uo.UrunOptionRef = asd.UrunOptionRef
+   inner join dbo.tb_UrunOptionAsortiRecete uoar (nolock) on uoar.UrunOptionAsortiRef = asd.UrunOptionAsortiRef
+   inner join dbo.tb_UrunOptionSize uos (nolock) on uos.UrunOptionSizeRef = uoar.UrunOptionSizeRef
+   inner join dbo.tb_SizeTanim st (nolock) on st.Id = uos.SizeRef
+   inner join tb_Renk r (nolock) on r.RenkRef = uo.RenkRef
+   inner join dbo.tb_Urun u (nolock) on u.UrunOptionRef = asd.UrunOptionRef
+   where      asd.UrunOptionAsortiRef is not null
+   union
+   select     distinct asd.SiparisKod, asd.ModelKod OzelKod1, rtrim(r.Tanim) + '-' + r.Kod Renk, asd.AmbalajAdet, asd.Miktar - asd.Iptal NetSiparis
+                       ,(asd.Miktar - asd.Iptal) ToplamAdet, asd.Miktar - asd.Iptal Miktar, rtrim(replace(st.SizeKisaKod, '+', '_')) Beden
+                       ,rtrim(replace(st.SizeKisaKod, '+', '_')) + case when rtrim(coalesce(uos.Boy, '')) = '' then ''
+                                                                        else '-' + rtrim(coalesce(uos.Boy, ''))
+                                                                   end Beden_Boy, asb.Grup, st.Id SizeRef, case when rtrim(coalesce(uos.Boy, '')) = '' then ''
+                                                                                                                else rtrim(coalesce(uos.Boy, ''))
+                                                                                                           end Boy, asd.UrunOptionRef, asd.UrunOptionAsortiRef
+                       ,asd.UrunOptionSizeRef,asd.OrginalFabrikaCikisTarih, asd.SellingRegion, asd.VehicleId
+   from       #AlimSiparisDetay asd (nolock)
+   inner join #AlmSipRaporBaslik asb (nolock) on asb.UrunOptionSizeRef = asd.UrunOptionSizeRef AND asb.OrginalFabrikaCikisTarih = asd.OrginalFabrikaCikisTarih
+   AND asb.SellingRegion = asd.SellingRegion AND asb.VehicleId = asd.VehicleId
+   inner join dbo.tb_UrunOption uo (nolock) on uo.UrunOptionRef = asd.UrunOptionRef
+   inner join dbo.tb_UrunOptionSize uos (nolock) on uos.UrunOptionSizeRef = asd.UrunOptionSizeRef
+   inner join dbo.tb_SizeTanim st (nolock) on st.Id = uos.SizeRef
+   inner join tb_Renk r (nolock) on r.RenkRef = uo.RenkRef
+   inner join dbo.tb_Urun u (nolock) on u.UrunOptionRef = asd.UrunOptionRef
+   where      asd.UrunOptionSizeRef is not null;
+
+
+   select    c.SiparisKod, c.OzelKod1, c.Renk, c.AmbalajAdet, c.NetSiparis, c.ToplamAdet, c.Miktar, c.Beden_Boy, c.Grup, isnull(d.BedenSira, 0) BedenSira
+             ,c.Beden, c.SizeRef, c.Boy, c.UrunOptionRef, c.UrunOptionAsortiRef, c.UrunOptionSizeRef,c.OrginalFabrikaCikisTarih, c.SellingRegion, c.VehicleId
+   into      #Crossonuc22
+   from      #Crossonuc11 c
+   left join tb_BedenSira d (nolock) on d.Beden = replace(c.Beden_Boy, '_', '+');
+
+   select   identity(int, 1, 1) Sira, *
+   into     #Crossonuc
+   from     #Crossonuc22
+   order by BedenSira;
+
+   select   distinct Beden_Boy --'_' + Beden_Boy Beden_Boy,              
+                     ,BedenSira, Beden, SizeRef, Boy
+   into     #yensonuc1
+   from     #Crossonuc c
+   --Left JOIN #Bedensira b ON b.Beden=c.Beden_Boy              
+   order by BedenSira;
+
+   select    identity(int, 1, 1) Sira, y.Beden_Boy --'_' + Beden_Boy Beden_Boy,              
+             ,y.BedenSira, case y.SizeRef
+                                when 0 then y.[Beden] + y.Boy
+                                else isnull(st.Tanim, y.[Beden]) + y.Boy
+                           end Beden
+   into      #yensonuc
+   from      #yensonuc1 y
+   left join dbo.tb_SizeTanim st (nolock) on st.Id = y.SizeRef
+   order by  BedenSira, isnull(st.Tanim, y.[Beden]) + y.Boy;
+
+   drop table #yensonuc1;
+   drop table #Crossonuc22;
+   drop table #Crossonuc11;
+
+   declare @bed_Boy char(10);
+   declare @str_tablo varchar(5000);
+   declare @str_Sum varchar(5000);
+   declare @tempsayac int;
+
+   set @str_tablo = '';
+   set @str_Sum = '';
+   set @tempsayac = 1;
+
+   while @tempsayac <= 54
+   begin
+      --select  @bed_Boy=Beden_Boy from #yensonuc where Sira=@tempsayac              
+      set @str_tablo = @str_tablo + ',BedenSum' + cast(@tempsayac as varchar(2)) + ' int ';
+      set @str_Sum = @str_Sum + ',sum( isnull(BedenSum' + cast(@tempsayac as varchar(2)) + ',0)) BedenSum' + cast(@tempsayac as varchar(2));
+      set @tempsayac = @tempsayac + 1;
+   end;
+
+   create table #tablo ([RID] [int] identity(1, 1) not null
+                        ,Grup int
+                        ,OzelKod1 char(8)
+                        ,Renk char(30)
+                        --,Line char(30)
+                        ,AmbalajAdet int
+                        ,NetSiparis int
+                        ,ToplamAdet numeric
+                        ,UrunOptionRef int
+                        ,UrunOptionAsortiRef int
+                        ,UrunOptionSizeRef INT
+                        ,OrginalFabrikaCikisTarih DATETIME
+						,SellingRegion INT
+						,VehicleId INT
+                        ,BedenSum1 int
+                        ,BedenSum2 int
+                        ,BedenSum3 int
+                        ,BedenSum4 int
+                        ,BedenSum5 int
+                        ,BedenSum6 int
+                        ,BedenSum7 int
+                        ,BedenSum8 int
+                        ,BedenSum9 int
+                        ,BedenSum10 int
+                        ,BedenSum11 int
+                        ,BedenSum12 int
+                        ,BedenSum13 int
+                        ,BedenSum14 int
+                        ,BedenSum15 int
+                        ,BedenSum16 int
+                        ,BedenSum17 int
+                        ,BedenSum18 int
+                        ,BedenSum19 int
+                        ,BedenSum20 int
+                        ,BedenSum21 int
+                        ,BedenSum22 int
+                        ,BedenSum23 int
+                        ,BedenSum24 int
+                        ,BedenSum25 int
+                        ,BedenSum26 int
+                        ,BedenSum27 int
+                        ,BedenSum28 int
+                        ,BedenSum29 int
+                        ,BedenSum30 int
+                        ,BedenSum31 int
+                        ,BedenSum32 int
+                        ,BedenSum33 int
+                        ,BedenSum34 int
+                        ,BedenSum35 int
+                        ,BedenSum36 int
+                        ,BedenSum37 int
+                        ,BedenSum38 int
+                        ,BedenSum39 int
+                        ,BedenSum40 int
+                        ,BedenSum41 int
+                        ,BedenSum42 int
+                        ,BedenSum43 int
+                        ,BedenSum44 int
+                        ,BedenSum45 int
+                        ,BedenSum46 int
+                        ,BedenSum47 int
+                        ,BedenSum48 int
+                        ,BedenSum49 int
+                        ,BedenSum50 int
+                        ,BedenSum51 int
+                        ,BedenSum52 int
+                        ,BedenSum53 int
+                        ,BedenSum54 int);
+
+   --exec ('create table #tablo  (    [RID] [int] IDENTITY (1, 1) NOT NULL , Grup int,OzelKod1 char(8), Renk char(30) ,Line char(30) ,AmbalajAdet int,NetSiparis int,ToplamAdet numeric,UrunOptionRef int,UrunOptionAsortiRef int,UrunOptionSizeRef int' + @str_tablo + ')');
+   declare @Sira char(4);
+   declare cr_CrossTum insensitive cursor for
+      select Sira, Beden_Boy from #Crossonuc order by Sira;
+   open cr_CrossTum;
+   fetch next from cr_CrossTum
+   into @Sira, @bed_Boy;
+   while @@fetch_status = 0
+   begin
+      declare @tempsira int;
+      select @tempsira = Sira from #yensonuc where Beden_Boy = @bed_Boy;
+
+      exec ('insert into #tablo (Grup,OzelKod1,Renk,AmbalajAdet,NetSiparis,ToplamAdet,UrunOptionRef,UrunOptionAsortiRef,UrunOptionSizeRef,OrginalFabrikaCikisTarih, SellingRegion,VehicleId, BedenSum' + @tempsira + ' )              
+                select Grup,OzelKod1,Renk,AmbalajAdet,NetSiparis,ToplamAdet,UrunOptionRef,UrunOptionAsortiRef,UrunOptionSizeRef,OrginalFabrikaCikisTarih ,SellingRegion, VehicleId,Miktar from #Crossonuc where Sira =  ' + @Sira + ' ');
+      fetch next from cr_CrossTum
+      into @Sira, @bed_Boy;
+   end;
+   close cr_CrossTum;
+   deallocate cr_CrossTum;
+
+   create table #sncPO1 (BaslikSayi int
+                         ,Sayfa int
+                         ,SayfaTip int
+                         ,Grup int
+                         ,[COLOR] varchar(50)
+                        -- ,Line varchar(3)
+                         ,[SPECIAL CODE] varchar(50)
+						 ,SellingRegion int
+						 ,OrginalFabrikaCikisTarih DATETIME
+						 ,VehicleId INT
+                         ,BedenSum1 int
+                         ,BedenSum2 int
+                         ,BedenSum3 int
+                         ,BedenSum4 int
+                         ,BedenSum5 int
+                         ,BedenSum6 int
+                         ,BedenSum7 int
+                         ,BedenSum8 int
+                         ,BedenSum9 int
+                         ,BedenSum10 int
+                         ,BedenSum11 int
+                         ,BedenSum12 int
+                         ,BedenSum13 int
+                         ,BedenSum14 int
+                         ,BedenSum15 int
+                         ,BedenSum16 int
+                         ,BedenSum17 int
+                         ,BedenSum18 int
+                         ,BedenSum19 int
+                         ,BedenSum20 int
+                         ,BedenSum21 int
+                         ,BedenSum22 int
+                         ,BedenSum23 int
+                         ,BedenSum24 int
+                         ,BedenSum25 int
+                         ,BedenSum26 int
+                         ,BedenSum27 int
+                         ,BedenSum28 int
+                         ,BedenSum29 int
+                         ,BedenSum30 int
+                         ,BedenSum31 int
+                         ,BedenSum32 int
+                         ,BedenSum33 int
+                         ,BedenSum34 int
+                         ,BedenSum35 int
+                         ,BedenSum36 int
+                         ,BedenSum37 int
+                         ,BedenSum38 int
+                         ,BedenSum39 int
+                         ,BedenSum40 int
+                         ,BedenSum41 int
+                         ,BedenSum42 int
+                         ,BedenSum43 int
+                         ,BedenSum44 int
+                         ,BedenSum45 int
+                         ,BedenSum46 int
+                         ,BedenSum47 int
+                         ,BedenSum48 int
+                         ,BedenSum49 int
+                         ,BedenSum50 int
+                         ,BedenSum51 int
+                         ,BedenSum52 int
+                         ,BedenSum53 int
+                         ,BedenSum54 int
+                         ,[PIECES PER BOX] int
+                         ,[NO. OF BOXES] int
+                         ,[NON ASSORTED PIECES] int
+                         ,[TOTAL PIECES] int
+                         ,Kolimi bit);
+   select * into #sncPO22 from #sncPO1;
+   if exists (select 1
+              from   #AlimSiparisDetay asd (nolock)
+              where  asd.UrunOptionAsortiRef is not null) and exists (select 1
+                                                                      from   #AlimSiparisDetay asd (nolock)
+                                                                      where  asd.UrunOptionSizeRef is not null)
+   begin
+      --if object_id('tempdb..#sncPO1') is not null drop table #sncPO1;
+      --if object_id('tempdb..#sncPO22') is not null drop table #sncPO22;
+
+
+
+      exec ('insert into #sncPO1 
+		select    ( select count(distinct Beden_Boy) from #Crossonuc ) BaslikSayi,0 Sayfa,0 SayfaTip,Grup              
+                , Renk [COLOR] , cast(OzelKod1 as varchar(50)) [SPECIAL CODE],SellingRegion,OrginalFabrikaCikisTarih , VehicleId' + @str_Sum + '              
+                , AmbalajAdet [PIECES PER BOX] ,NetSiparis [NO. OF BOXES],NetSiparis [NON ASSORTED PIECES],ToplamAdet [TOTAL PIECES], case when UrunOptionSizeRef is not null then 0 else 1 end Kolimi from #tablo where AmbalajAdet > 1               
+                group by Grup,OzelKod1,Renk,SellingRegion,OrginalFabrikaCikisTarih, VehicleId,AmbalajAdet,NetSiparis,ToplamAdet, case when UrunOptionSizeRef is not null then 0 else 1 end');
+      exec ('insert into #sncPO1               
+                select    ( select count(distinct Beden_Boy) from #Crossonuc ) BaslikSayi,0 Sayfa,0 SayfaTip,Grup              
+                , Renk [COLOR], cast(OzelKod1 as varchar(50)) [SPECIAL CODE],SellingRegion,OrginalFabrikaCikisTarih,VehicleId ' + @str_Sum + '              
+                , AmbalajAdet [PIECES PER BOX] ,NetSiparis [NO. OF BOXES],NetSiparis [NON ASSORTED PIECES]
+				,ToplamAdet [TOTAL PIECES], case when UrunOptionSizeRef is not null then 0 else 1 end Kolimi from #tablo where AmbalajAdet = 1               
+                group by RID,Grup,OzelKod1,Renk,SellingRegion,OrginalFabrikaCikisTarih,VehicleId,AmbalajAdet,NetSiparis,ToplamAdet, case when UrunOptionSizeRef is not null then 0 else 1 end');
+      insert into #sncPO22 select * from #sncPO1;
+
+   end;
+   else
+   begin
+      if exists (select 1
+                 from   #AlimSiparisDetay asd (nolock)
+                 where  asd.UrunOptionAsortiRef is not null)
+      begin
+         exec ('insert into #sncPO22 
+			select  ( select count(distinct Beden_Boy) from #Crossonuc ) BaslikSayi,0 Sayfa,0 SayfaTip,Grup              
+                        , Renk [COLOR] , cast(OzelKod1 as varchar(50)) [SPECIAL CODE],SellingRegion,OrginalFabrikaCikisTarih,VehicleId ' + @str_Sum + '              
+                        , AmbalajAdet [PIECES PER BOX] ,NetSiparis [NO. OF BOXES],NetSiparis [NON ASSORTED PIECES]
+						,ToplamAdet [TOTAL PIECES], case when UrunOptionSizeRef is not null then 0 else 1 end Kolimi 
+						 from #tablo               
+                        group by Grup,OzelKod1,Renk,SellingRegion,OrginalFabrikaCikisTarih,VehicleId,AmbalajAdet,NetSiparis,ToplamAdet, 
+						case when UrunOptionSizeRef is not null then 0 else 1 end');
+      end;
+      else
+      begin
+         exec ('insert into #sncPO22
+	  select  ( select count(distinct Beden_Boy) from #Crossonuc ) BaslikSayi,0 Sayfa,0 SayfaTip,Grup              
+                        , Renk [COLOR] ,cast(OzelKod1 as varchar(50)) [SPECIAL CODE],SellingRegion,OrginalFabrikaCikisTarih,VehicleId  ' + @str_Sum + '              
+                        , AmbalajAdet [PIECES PER BOX] ,NetSiparis [NO. OF BOXES],NetSiparis [NON ASSORTED PIECES],ToplamAdet [TOTAL PIECES], 
+						case when UrunOptionSizeRef is not null then 0 else 1 end Kolimi   from #tablo               
+                        group by RID,Grup,OzelKod1,Renk,SellingRegion,OrginalFabrikaCikisTarih,VehicleId,AmbalajAdet,NetSiparis,ToplamAdet, case when UrunOptionSizeRef is not null then 0 else 1 end');
+      end;
+   end;
+   drop table #sncPO1;
+
+   update #sncPO22
+   set    [PIECES PER BOX] = case when Kolimi = 0 then 0 else [PIECES PER BOX] end, [NO. OF BOXES] = case when Kolimi = 0 then 0 else [NO. OF BOXES] end
+          ,[NON ASSORTED PIECES] = case when Kolimi = 0 then [NON ASSORTED PIECES] else 0 end;
+   update #sncPO22 set Sayfa = case when Kolimi = 0 then 1 else 2 end;
+
+   select * into #yy from #sncPO22 where 1 = 2;
+
+   exec ('insert into #yy      
+        select  BaslikSayi,Sayfa,SayfaTip,Grup,[COLOR],[SPECIAL CODE],SellingRegion,OrginalFabrikaCikisTarih,VehicleId' + @str_Sum + '              
+        ,sum([PIECES PER BOX]) [PIECES PER BOX] ,sum([NO. OF BOXES]) [NO. OF BOXES],              
+        sum([NON ASSORTED PIECES]) [NON ASSORTED PIECES],sum([TOTAL PIECES]) [TOTAL PIECES],Kolimi
+		from #sncPO22                
+        group by BaslikSayi,Sayfa,SayfaTip,Grup,[COLOR],[SPECIAL CODE],SellingRegion,OrginalFabrikaCikisTarih,VehicleId,Kolimi');
+   drop table #sncPO22;
+
+
+   update #yy set Sayfa = 0;
+
+   select identity(int, 1, 1) Sira, case when Kolimi = 0 then 'NON ASSORTED GOODS (ONE SIZE ONE CARTON)'
+                                         else 'ASSORTED GOODS'
+                                    end GroupType, *
+   into   #sncPO
+   from   #yy;
+
+
+
+   declare @Grup int;
+   declare @BaslikSayi int;
+   declare @Sr int;
+   select @BaslikSayi = count(distinct Beden_Boy)from #Crossonuc;
+   declare cr_GrupSayi insensitive cursor for
+      select Grup from #sncPO order by Grup;
+   open cr_GrupSayi;
+   fetch next from cr_GrupSayi
+   into @Grup;
+   while @@fetch_status = 0
+   begin
+      declare @count int;
+      declare @sayfa int;
+      set @sayfa = 1;
+      set @count = 1;
+      declare cr_SayfaSayi insensitive cursor for
+         select Sira from #sncPO where Grup = @Grup order by Sira;
+      open cr_SayfaSayi;
+      fetch next from cr_SayfaSayi
+      into @Sr;
+      while @@fetch_status = 0
+      begin
+         if @BaslikSayi >= 0 and @BaslikSayi < 11
+         begin
+            if @count > 26 begin
+   set @sayfa = @sayfa + 1;
+   set @count = 1;
+            end;
+            update #sncPO set Sayfa = @sayfa, SayfaTip = 1 where Sira = @Sr;
+         end;
+         if @BaslikSayi >= 11 and @BaslikSayi < 26
+         begin
+            if @count > 11 begin
+   set @sayfa = @sayfa + 1;
+   set @count = 1;
+            end;
+            update #sncPO set Sayfa = @sayfa, SayfaTip = 2 where Sira = @Sr;
+         end;
+         if @BaslikSayi >= 26
+         begin
+            if @count > 6 begin
+   set @sayfa = @sayfa + 1;
+   set @count = 1;
+            end;
+            update #sncPO set Sayfa = @sayfa, SayfaTip = 3 where Sira = @Sr;
+         end;
+         set @count = @count + 1;
+         fetch next from cr_SayfaSayi
+         into @Sr;
+      end;
+      close cr_SayfaSayi;
+      deallocate cr_SayfaSayi;
+      fetch next from cr_GrupSayi
+      into @Grup;
+   end;
+   close cr_GrupSayi;
+   deallocate cr_GrupSayi;
+
+
+   exec ('insert into #sncPO                
+        Select ''TOTAL'',1,1,1,Grup,[COLOR],''''' +',SellingRegion,' + 'OrginalFabrikaCikisTarih,VehicleId'  + @str_Sum + '              
+        ,0,0,0,sum([TOTAL PIECES]),0 from #sncPO  s              
+        group by [COLOR],Grup,OrginalFabrikaCikisTarih,VehicleId,SellingRegion');
+
+   set @tempsayac = 1;
+   while @tempsayac <= 54
+   begin
+      declare @BedenSumStr varchar(800);
+      set @BedenSumStr = ' select COLOR,ISNULL(Sum(case when Kolimi=0 then BedenSum' + convert(varchar(2), @tempsayac) + ' else BedenSum'
+                         + cast(@tempsayac as varchar(2))
+                         + '* [NO. OF BOXES] end),0) BedenSum,SellingRegion,OrginalFabrikaCikisTarih,VehicleId 
+into #tempTotal FROM #sncPO WHERE GroupType<>''TOTAL'' Group by COLOR,SellingRegion,OrginalFabrikaCikisTarih,VehicleId ';
+      set @BedenSumStr = @BedenSumStr + ' UPDATE s Set BedenSum' + cast(@tempsayac as varchar(2))
+                         + '=t.BedenSum FROM #sncPO s INNER JOIN #tempTotal t ON t.COLOR=s.COLOR and t.OrginalFabrikaCikisTarih = s.OrginalFabrikaCikisTarih' 
+						 + ' and t.SellingRegion = s.SellingRegion and t.VehicleId = s.VehicleId' 
+						+ ' WHERE GroupType=''TOTAL'' DROP TABLE #tempTotal';
+      --print @BedenSumStr
+      exec (@BedenSumStr);
+      set @tempsayac = @tempsayac + 1;
+   end;
+   --SELECT * FROM #sncPO
+
+   declare @ModelKlasor as varchar(100), @PLMModelKlasor as varchar(100);
+   select @ModelKlasor = 'http://www.temaonline.com/ModelResim';
+   set @PLMModelKlasor = 'http://teknikfoy.lcwaikiki.local/ModelResim.aspx?path=';
+
+      --booking id leri virgüllü hale getirir.
+DECLARE @orderBookingsString NVARCHAR(600);
+SET @orderBookingsString =
+(
+    SELECT
+        (
+            SELECT STUFF(list, 1, 1, '') orderBooking
+            FROM
+            (
+                SELECT DISTINCT
+                       ',' + CAST(booking.BookingRef AS VARCHAR(16)) AS [text()]
+                FROM ANKA.tb_OrderBooking booking (NOLOCK)
+                WHERE booking.OrderCode = @SiparisNo
+                GROUP BY booking.OrderCode,
+                         booking.BookingRef
+                FOR XML PATH('')
+            ) AS Sub(list)
+        )
+);
+
+
+--kuma?ç? ismini virgülle hale getirir.
+DECLARE @orderFabricMillString NVARCHAR(600);
+SET @orderFabricMillString =
+(
+    SELECT
+        (
+            SELECT STUFF(list, 1, 1, '') orderBooking
+            FROM
+            (
+                SELECT DISTINCT
+                       ' - ' + cs.Isim AS [text()]
+                FROM ANKA.tb_OrderBooking booking (NOLOCK)
+				INNER JOIN dbo.tb_CariSourcing cs ON cs.AxCariKod =booking.FabricMillAxCariKod
+                WHERE booking.OrderCode = @SiparisNo
+                GROUP BY booking.OrderCode,cs.Isim
+                FOR XML PATH('')
+            ) AS Sub(list)
+        )
+);
+
+SELECT DISTINCT
+       InspectionDate,
+	   SiparisKod,
+	   SellingRegion
+INTO #inspectionDates
+FROM dbo.tb_AlimSiparisUlkeDetay
+WHERE tb_AlimSiparisUlkeDetay.SiparisKod = @SiparisNo;
+
+   select    distinct ab.KumasFiyatDoviz, ab.KumasFiyati, ab.OrginalFabrikaCikisTarih, ab.EnGecYuklemeTarihi,ab.Sira SiraBaslik, ab.Kumas, ab.ModelAd, ab.SiparisKod, ab.UreticiCariKod
+                      ,c.Ad UreticiAd,ulke.ISO_Description AS UreticiCariUlke, cm.Ad MumessilAd, m.Tanim Marka --'' Line,  
+					  ,(
+					  CASE 
+					  WHEN c.AXSirketKodu ='mal1' THEN 'LC Waikiki Morocco'  
+					  WHEN c.AXSirketKodu ='KZL1' THEN 'LC Waikiki Kazakistan'
+					  WHEN c.AXSirketKodu ='RUL1' THEN 'LC Waikiki Rusya'
+					  WHEN c.AXSirketKodu ='idl1' THEN 'LC Waikiki Endonezya' 
+					  ELSE 'LC Waikiki' END)
+					  AS Buyer,
+					  ab.KategoriNo,
+					  COALESCE(ios.TanimIng, ios.TanimTrk) OdemeSekil1,
+					  ab.AnlasilanUretimFiyat, ab.AnlasilanUretimFiyatDoviz
+                      ,case @RaporTip
+                            when 1 then replace(cast(ab.MaliyetFiyat as varchar(10)), '.', ',')
+                            else ''
+                       end as MaliyetFiyat, case @RaporTip
+                                                 when 1 then cast(ab.MaliyetFiyatDoviz as varchar(10))
+                                                 else ''
+                                            end as MaliyetFiyatDoviz, ab.Sezon, ab.MerchAltGrup,ab.BuyerGrupTanim, coalesce(uk.TanimIng, uk.Tanim) UrunKlasman
+                      ,coalesce(vs.TanimIng, vs.Tanim) Vasita, iys.Tanim YuklemeSekil, lt.Tanim YuklemeCikisLimani
+                      ,(select sum([TOTAL PIECES])from #sncPO where [SPECIAL CODE] <> '' AND #sncPO.VehicleId = ab.VehicleId) ToplamSiparis
+                      ,convert(varchar(10), ab.AnlasilanYuklemeTermin, 104) AnlasilanYuklemeTermin, ab.IstenenTestler, ab.PaketlemeDetaylari, ab.EkDetaylar
+                      ,ab.Sartlar, ab.GecikmeSartlari, ab.IstenenTestler_En, ab.PaketlemeDetaylari_En, ab.EkDetaylar_En, ab.Sartlar_En, ab.GecikmeSartlari_En
+                      ,ab.maxRevizyonNo,ab.LastRevisionDate, ab.ResimModel, convert(varchar(10), IlkSiparisTarihi, 104) IlkSiparisTarihi, ab.UreticiFirmaRef, ab.KDV
+                        ,case ab.KumasciCariKod
+                            when 'K0' then 'B?L?NM?YOR'
+                            when 'K1' then ISNULL(@orderFabricMillString,C.Ad)
+                            else ISNULL(@orderFabricMillString,cs.Isim)
+                       end Kumasci, c.VergiNo, c.VergiDaire, 'Beden1' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 1), '')
+                      ,'Beden2' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 2), '')
+                      ,'Beden3' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 3), '')
+                      ,'Beden4' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 4), '')
+                      ,'Beden5' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 5), '')
+                      ,'Beden6' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 6), '')
+                      ,'Beden7' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 7), '')
+                      ,'Beden8' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 8), '')
+                      ,'Beden9' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 9), '')
+                      ,'Beden10' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 10), '')
+                      ,'Beden11' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 11), '')
+                      ,'Beden12' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 12), '')
+                      ,'Beden13' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 13), '')
+                      ,'Beden14' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 14), '')
+                      ,'Beden15' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 15), '')
+                      ,'Beden16' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 16), '')
+                      ,'Beden17' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 17), '')
+                      ,'Beden18' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 18), '')
+                      ,'Beden19' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 19), '')
+                      ,'Beden20' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 20), '')
+                      ,'Beden21' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 21), '')
+                      ,'Beden22' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 22), '')
+                      ,'Beden23' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 23), '')
+                      ,'Beden24' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 24), '')
+                      ,'Beden25' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 25), '')
+                      ,'Beden26' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 26), '')
+                      ,'Beden27' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 27), '')
+                      ,'Beden28' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 28), '')
+                      ,'Beden29' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 29), '')
+                      ,'Beden30' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 30), '')
+                      ,'Beden31' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 31), '')
+                      ,'Beden32' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 32), '')
+                      ,'Beden33' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 33), '')
+                      ,'Beden34' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 34), '')
+                      ,'Beden35' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 35), '')
+                      ,'Beden36' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 36), '')
+                      ,'Beden37' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 37), '')
+                      ,'Beden38' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 38), '')
+                      ,'Beden39' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 39), '')
+                      ,'Beden40' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 40), '')
+                      ,'Beden41' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 41), '')
+                      ,'Beden42' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 42), '')
+                      ,'Beden43' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 43), '')
+                      ,'Beden44' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 44), '')
+                      ,'Beden45' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 45), '')
+                      ,'Beden46' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 46), '')
+                      ,'Beden47' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 47), '')
+                      ,'Beden48' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 48), '')
+                      ,'Beden49' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 49), '')
+                      ,'Beden50' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 50), '')
+                      ,'Beden51' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 51), '')
+                      ,'Beden52' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 52), '')
+                      ,'Beden53' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 53), '')
+                      ,'Beden54' = isnull((select replace(Beden, '_', '+')from #yensonuc where Sira = 54), ''), 'UreticiKisaKod' = isnull(kk.Kod, '')
+                      ,case when exists (select * from #ARaporSayfa where VIP = 1) then 1
+                            else 0
+                       end VIP, ab.ExpressSiparis, COALESCE(@orderBookingsString,ab.KumasciBookingId,'') KumasciBookingId,ab.JIT,
+					ISNULL(ab.Parity,0) Parity,(SELECT ParaBirimi FROM Retail.dbo.tb_Ulke (NOLOCK) WHERE UlkeRef =ulke.UlkeRef) LocalCurrency, 
+					--(
+					--	SELECT CASE
+					--	           WHEN
+					--	           (
+					--	               SELECT COUNT(*) FROM #inspectionDates WHERE InspectionDate = ab.OrginalFabrikaCikisTarih
+					--	           ) = 2 THEN
+					--	               0
+					--	           ELSE
+					--	                (SELECT SellingRegion FROM #inspectionDates WHERE InspectionDate = ab.OrginalFabrikaCikisTarih)
+					--	       END
+					--	) AS SellingRegion,
+						ab.ProformaInvoiceNo, ab.VehicleId
+   into      #tson
+   from      #ARaporSayfa ab
+   left join tb_Cari c (nolock) on c.CariKod = ab.UreticiCariKod
+   left join tb_Cari cm (nolock) on cm.CariKod = ab.MumessilCariKod
+   left join tb_Marka m (nolock) on m.Kod = ab.Marka
+   left join tb_IthalatOdemeSekli ios (nolock) on ios.Kod = ab.OdemeSekilKod
+   left join tb_UrunKlasman uk (nolock) on uk.Kod = ab.UrunKlasman
+   left join tb_VasitaTanim vs (nolock) on vs.Kod = ab.Vasitakod
+   left join tb_IthalatYuklemeSekli iys (nolock) on iys.Kod = ab.YuklemeSekilKod
+   left join tb_IthalatLimanTanim lt (nolock) on lt.Kod = ab.YuklemeCikisLimani
+   left join Tekstil..tt_UreticiKisaKod kk (nolock) on kk.CariKod = ab.UreticiCariKod
+   left join tb_CariSourcing cs (nolock) on cs.Carikod = ab.KumasciCariKod
+   left join dbo.tb_VadeTip v (nolock) on v.Kod = ab.OdemeVade
+   LEFT JOIN dbo.tb_Ulke ulke (NOLOCK) ON ulke.ISO_Kod = c.ISO_Kod;
+
+   select   sum([TOTAL PIECES]) ToplamAdet, Grup,SellingRegion, VehicleId
+   into     #ToplamAdet
+   from     #sncPO
+   where    [SPECIAL CODE] = ''
+   group by Grup,SellingRegion,VehicleId;
+
+	--DROP TABLE IF EXISTS [#TotalQuantity];
+
+	--CREATE TABLE [#TotalQuantity]
+	--(
+	--	[ToplamAdet] INT,
+	--	[Grup] INT
+	--);
+
+	--INSERT INTO [#TotalQuantity]
+	--(
+	--	[ToplamAdet],
+	--	[Grup]
+	--)
+	--SELECT DISTINCT SUM([TOTAL PIECES]) ToplamAdet,
+	--	   Grup
+	--FROM #sncPO
+	--WHERE [SPECIAL CODE] = ''
+	--GROUP BY Grup;
+
+	DECLARE @ToplamFiyat FLOAT;
+
+---	SELECT * FROM #TotalQuantity
+
+   select    @ToplamFiyat = sum(ToplamAdet * cast(replace(MaliyetFiyat, ',', '.') as float))
+   from      #ToplamAdet s
+   left join #tson t on s.Grup = t.SiraBaslik AND s.VehicleId = t.VehicleId;
+
+   select DISTINCT s.SellingRegion,  Sira, GroupType, BaslikSayi, Sayfa, SayfaTip, s.Grup, COLOR,'' Line, [SPECIAL CODE] AS SPECIALCODE, BedenSum1, BedenSum2, BedenSum3, BedenSum4, BedenSum5, BedenSum6
+             ,BedenSum7, BedenSum8, BedenSum9, BedenSum10, BedenSum11, BedenSum12, BedenSum13, BedenSum14, BedenSum15, BedenSum16, BedenSum17, BedenSum18
+             ,BedenSum19, BedenSum20, BedenSum21, BedenSum22, BedenSum23, BedenSum24, BedenSum25, BedenSum26, BedenSum27, BedenSum28, BedenSum29, BedenSum30
+             ,BedenSum31, BedenSum32, BedenSum33, BedenSum34, BedenSum35, BedenSum36, BedenSum37, BedenSum38, BedenSum39, BedenSum40, BedenSum41, BedenSum42
+             ,BedenSum43, BedenSum44, BedenSum45, BedenSum46, BedenSum47, BedenSum48, BedenSum49, BedenSum50, BedenSum51, BedenSum52, BedenSum53, BedenSum54
+             ,[PIECES PER BOX] AS PIECESPERBOX, [NO. OF BOXES] AS NOOFBOXES, [NON ASSORTED PIECES] AS NONASSORTEDPIECES, [TOTAL PIECES] AS TOTALPIECES, t.*
+             ,ResimYeri = ISNULL('file:' + Numune.dbo.fnk_GetUrunResim(@OzelKod1), (select     top 1 replace(
+                                                  replace(
+                                                     case when tf.PlmCode is null then
+                                                             @ModelKlasor + replace(case when len(isnull(Resim_YeriSB, '')) > 3 then Resim_YeriSB
+                                                                                         else case when len(isnull(Resim_Yeri_Eng, '')) > 3 then Resim_Yeri_Eng
+                                                                                                   else Resim_Yeri
+                                                                                              end
+                                                                                    end
+                                                                                    ,'\'
+                                                                                    ,'/')
+                                                          else
+                                                             @PLMModelKlasor
+                                                             + replace(replace(case when len(isnull(Resim_YeriSB, '')) > 3 then Resim_YeriSB
+                                                                                    else case when len(isnull(Resim_Yeri_Eng, '')) > 3 then Resim_Yeri_Eng
+                                                                                              else Resim_Yeri
+                                                                                         end
+                                                                               end
+                                                                               ,'\\promasterv.lcwaikiki.local\flexvault\images\'
+                                                                               ,'')
+                                                                       ,'\'
+                                                                       ,'/')
+                                                     end
+                                                     ,'J:'
+                                                     ,'')
+                                                  ,'j:'
+                                                  ,'')--,
+												 -- s.SellingRegion
+                              from       tb_UrunGrup ug (nolock)
+                              inner join tb_Urun_NumuneBaglanti unb (nolock) on left(unb.OzelKod1, 6) = left(ug.OzelKod1, 6)
+                                                                                and right(unb.OzelKod1, 1) = right(ug.OzelKod1, 1)
+                              inner join Numune..TeknikFoy_Tbl tf (nolock) on tf.Model_Kodu = unb.Numune_Kodu
+                              where      ug.ModelGrupRef = @ModelGrupRef)), 
+							  'ToplamFiyat' = @ToplamFiyat, ta.ToplamAdet
+   from      #sncPO s
+   left join #tson t on s.Grup = t.SiraBaslik AND t.VehicleId = s.VehicleId
+   left join #ToplamAdet ta on ta.Grup = s.Grup AND s.SellingRegion = ta.SellingRegion
+   order by  s.Sira;
+
+
+   --select  distinct Grup,Sayfa  from #sncPO s order by Grup,Sayfa              
+   drop table #AlmSipRaporBaslik;
+   drop table #ARaporSayfa;
+   drop table #Crossonuc;
+   drop table #yensonuc;
+   --exec ('drop table #tablo' + @@spid);
+   drop table #tablo;
+   drop table #sncPO;
+   drop table #yy;
+   drop table #tson;
+   drop table #ToplamAdet;
+   drop table #AlimSiparisDetay;
+   drop table #AlimSiparisIthalat;
+   DROP TABLE #inspectionDates
+   DROP TABLE #RouteCountry
+   DROP TABLE #RouteCountry2
+GO
+
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
