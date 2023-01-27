@@ -6018,11 +6018,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\cemre.turkmen\\Desktop\\notlarım\\MVP\\MVP_Project\\MVP_Project\\MVP_Project.csproj",
+      "projectUniqueName": "C:\\Users\\cemre.turkmen\\Desktop\\MVP_Project\\MVP_Project\\MVP_Project\\MVP_Project.csproj",
       "projectName": "MVP_Project",
-      "projectPath": "C:\\Users\\cemre.turkmen\\Desktop\\notlarım\\MVP\\MVP_Project\\MVP_Project\\MVP_Project.csproj",
+      "projectPath": "C:\\Users\\cemre.turkmen\\Desktop\\MVP_Project\\MVP_Project\\MVP_Project\\MVP_Project.csproj",
       "packagesPath": "C:\\Users\\cemre.turkmen\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\cemre.turkmen\\Desktop\\notlarım\\MVP\\MVP_Project\\MVP_Project\\obj\\",
+      "outputPath": "C:\\Users\\cemre.turkmen\\Desktop\\MVP_Project\\MVP_Project\\MVP_Project\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files\\dotnet\\sdk\\NuGetFallbackFolder"

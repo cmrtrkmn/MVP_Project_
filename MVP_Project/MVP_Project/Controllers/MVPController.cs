@@ -15,7 +15,12 @@ namespace MVP_Project.Controllers
 {
     public class MVPController : Controller
     {
-        
+        public int Calculator(string team, string posiiton, int goalsMade, int goalReceived)
+        {
+            
+            throw new NotImplementedException();
+        }
+
         public IActionResult Index()
         {
             return View();
@@ -121,26 +126,9 @@ namespace MVP_Project.Controllers
                                     foreach(var bas in _playerListBasketball)
                                     {
                                         //rules
-                                        if(bas.position=="G")
-                                        {
-                                            bas.katSayiScoredPoint = 2;
-                                            bas.katSayiRebound = 3;
-                                            bas.katSayiAssist = 1;
-                                        }
-                                        if (bas.position == "F")
-                                        {
-                                            bas.katSayiScoredPoint = 2;
-                                            bas.katSayiRebound = 2;
-                                            bas.katSayiAssist = 2;
-                                        }
-                                        if (bas.position == "C")
-                                        {
-                                            bas.katSayiScoredPoint = 2;
-                                            bas.katSayiRebound = 1;
-                                            bas.katSayiAssist = 3;
-                                        }
-                                        
-                                        bas.Rating_Points=bas.ScoredPoint*bas.katSayiScoredPoint+bas.Rebound*bas.katSayiRebound+bas.katSayiAssist *bas.katSayiAssist;
+                                        Basketball _basketball = new Basketball();
+                                        bas.Rating_Points=_basketball.Calculator(bas.position,bas.ScoredPoint,bas.Rebound,bas.Assist);
+                                       
                                     }
                                     var winner = (from pl in _playerListBasketball
                                                  group pl by pl.TeamName into playerGroup
@@ -187,19 +175,9 @@ namespace MVP_Project.Controllers
                                     foreach (var bas in _playerListHandball)
                                     {
                                         //rules
-                                        if (bas.position == "G")
-                                        {
-                                            bas.factorGoalMade = 5;
-                                            bas.factorGoalRecieved = -2;
-                                        }
-                                        if (bas.position == "F")
-                                        {
-                                            bas.factorGoalMade = 1;
-                                            bas.factorGoalRecieved = -1;
-                                        }
-
-
-                                        bas.Rating_Points = bas.InitialRatingPoints + bas.GoalMade * bas.factorGoalMade + bas.GoalRecieved * bas.factorGoalRecieved;
+                                        Handball _handball = new Handball();
+                                        bas.Rating_Points = _handball.Calculator(bas.position, bas.InitialRatingPoints, bas.GoalMade, bas.GoalRecieved);                                        
+                                        
                                     }
                                     var winner = (from pl in _playerListHandball
                                                   group pl by pl.TeamName into playerGroup
